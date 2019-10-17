@@ -1,8 +1,8 @@
 import random, subprocess, sys, time
 
 tmp_file="tmp.mp4"
-skip=1
-offset=0.05
+skip=4
+offset=0.0433
 
 labels = [0.0] + [float(line.split()[0]) for line in open(sys.argv[2])]
 max_interval = max([labels[i+1]-labels[i] for i in (0, len(labels)-2)]) + 1
@@ -18,6 +18,7 @@ scope = 1.0 * len(video_duration) / len(labels)
 random.seed(time.time())
 
 args = ["ffmpeg"]
+
 for i in range(0, len(labels)-1):
 	video_index=(i*skip)%len(video_duration)
 	position = video_duration[video_index] * (1 - scope) * i / len(labels) + random.uniform(0, video_duration[video_index] * scope - max_interval)
