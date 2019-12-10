@@ -16,7 +16,7 @@ Label = collections.namedtuple("Label", """
     input_start_pos
     input_end_pos""")
 def parse_label(s):
-	t=s.split('\t')
+	t = s.split('\t')
 	return Label(
 	    output_start_pos = parse_timestamp(t[0]),
 	    output_end_pos = parse_timestamp(t[1]),
@@ -33,7 +33,7 @@ def format_label(l: Label):
 labels = [parse_label(s) for s in open(sys.argv[2]).read().splitlines()]
 
 Video = collections.namedtuple("Video", "duration")
-videos={}
+videos = {}
 for v in sys.argv[4:]:
 	videos[v] = None
 for l in labels:
@@ -41,19 +41,21 @@ for l in labels:
 		videos[l.input_file_name] = None
 for v in videos:
 	process = subprocess.run(["ffprobe",
-	    "-show_entries",
-	    "format=duration",
+	    "-select_streams", "v:0",
+	    "-show_entries", "stream=duration",
+	    "-of", "default=noprint_wrappers=1:nokey=1",
 	    "-v", "quiet",
-	    "-of", "csv=p=0",
 	    v],
 	    stdout=subprocess.PIPE)
 	videos[v] = Video(duration = float(process.stdout))
 
-strategy1 = True
+strategy1 = False
 strategy2 = True
-offset = 0.043
+strategy1_offset = -0.0415
+strategy2_offset = -0.0245
 skip = 4
-scope = 1.0 * len(sys.argv[4:]) / len(labels)
+#scope = 1.0 * len(sys.argv[4:]) / len(labels)
+scope = 1.0
 max_len = max(l.output_end_pos - l.output_start_pos for l in labels) + 0.001
 random.seed(time.time())
 
@@ -69,20 +71,23 @@ for i in range(len(labels)):
 	    random.uniform(0, videos[input_file_name].duration * scope - max_len))
 	input_end_pos = l.input_end_pos if (
 	    l.input_start_pos >= 0 and l.input_end_pos >= 0) else (
-	    input_start_pos + l.output_end_pos - l.output_start_pos - offset)
-	largs = [
-	    "-ss", str(input_start_pos),
-	    "-t", str(input_end_pos - input_start_pos),
-	    "-i", input_file_name]
+	    input_start_pos + l.output_end_pos - l.output_start_pos)
 	if strategy1:
-		args += largs
+		args += [
+		    "-ss", str(input_start_pos),
+		    "-t", str(input_end_pos - input_start_pos + strategy1_offset),
+		    "-i", input_file_name]
 	if strategy2 and (
 	    not os.path.isfile("%d.mp4" % (i + 1)) or
 	    input_file_name != l.input_file_name or
 	    input_start_pos != l.input_start_pos or
 	    input_end_pos != l.input_end_pos):
-		subprocess.run(["ffmpeg"] + largs + [
-		    "-c", "copy", "-an",
+		subprocess.run(["ffmpeg",
+		    "-ss", str(input_start_pos),
+		    "-t", str(input_end_pos - input_start_pos + strategy2_offset),
+		    "-i", input_file_name,
+		    "-filter_complex", "concat=n=1",
+		    "-an",
 		    "-y", "%d.mp4" % (i + 1)])
 	labels[i] = Label(
 	    l.output_start_pos,
@@ -102,13 +107,21 @@ open(sys.argv[3] + ".srt", 'w').writelines("%d\n%s --> %s\n%d\n\n" % (
 if strategy1:
 	subprocess.run(["ffmpeg"] + args + [
 	     "-filter_complex", "concat=n=%d" % (len(labels)),
+	     "-an",
 	     "-y", "tmp.mp4"])
 elif strategy2:
-	subprocess.run(["ffmpeg",
-	    "-i", "concat:" + "|".join(
-	        ["%d.mp4" % (i + 1) for i in range(0, len(labels))]),
-	    "-c", "copy", "-an",
-	    "-y", "tmp.mp4"])
+	process = subprocess.Popen(["ffmpeg",
+	    "-protocol_whitelist", "file,pipe",
+	    "-f", "concat",
+	    "-safe", "0",
+	    "-i", "pipe:",
+	    "-c", "copy",
+	    "-y", "tmp.mp4"],
+	    stdin=subprocess.PIPE)
+	process.stdin.writelines(
+	    b"file '%d.mp4'\n" % (i + 1) for i in range(len(labels)))
+	process.communicate()[0]
+	process.stdin.close()
 if strategy1 or strategy2:
 	subprocess.run(["ffmpeg",
 	    "-i", "tmp.mp4",
