@@ -46,13 +46,16 @@ for v in videos:
 	    "-of", "default=noprint_wrappers=1:nokey=1",
 	    "-v", "quiet",
 	    v],
+	    check=True,
 	    stdout=subprocess.PIPE)
 	videos[v] = Video(duration = float(process.stdout))
 
 strategy1 = False
-strategy2 = True
 strategy1_offset = -0.0415
+strategy2 = True
 strategy2_offset = -0.0245
+drop_hard_cuts = True
+drop_hard_cuts_prob = 0.05
 skip = 4
 #scope = 1.0 * len(sys.argv[4:]) / len(labels)
 scope = 1.0
@@ -60,7 +63,8 @@ max_len = max(l.output_end_pos - l.output_start_pos for l in labels) + 0.001
 random.seed(time.time())
 
 args = []
-for i in range(len(labels)):
+i = 0
+while i < len(labels):
 	l = labels[i]
 	input_file_name = l.input_file_name if (
 	    l.input_file_name is not None) else (
@@ -72,6 +76,21 @@ for i in range(len(labels)):
 	input_end_pos = l.input_end_pos if (
 	    l.input_start_pos >= 0 and l.input_end_pos >= 0) else (
 	    input_start_pos + l.output_end_pos - l.output_start_pos)
+	if drop_hard_cuts and (
+	    input_file_name != l.input_file_name or
+	    input_start_pos != l.input_start_pos or
+	    input_end_pos != l.input_end_pos):
+		process = subprocess.run(["ffmpeg",
+		    "-ss", str(input_start_pos),
+		    "-t", str(input_end_pos - input_start_pos),
+		    "-i", input_file_name,
+		    "-filter:v" , "select='gt(scene,%f)',showinfo" % drop_hard_cuts_prob,
+		    "-f", "null",
+		    "-"],
+		    check=True,
+		    stderr=subprocess.PIPE)
+		if "n:   0" in process.stderr.decode("utf-8"):
+			continue
 	if strategy1:
 		args += [
 		    "-ss", str(input_start_pos),
@@ -88,13 +107,15 @@ for i in range(len(labels)):
 		    "-i", input_file_name,
 		    "-filter_complex", "concat=n=1",
 		    "-an",
-		    "-y", "%d.mp4" % (i + 1)])
+		    "-y", "%d.mp4" % (i + 1)],
+		    check=True)
 	labels[i] = Label(
 	    l.output_start_pos,
 	    l.output_end_pos,
 	    input_file_name,
 	    input_start_pos,
 	    input_end_pos)
+	i += 1
 
 open(sys.argv[2], 'w').writelines(format_label(l) for l in labels)
 
@@ -108,7 +129,8 @@ if strategy1:
 	subprocess.run(["ffmpeg"] + args + [
 	     "-filter_complex", "concat=n=%d" % (len(labels)),
 	     "-an",
-	     "-y", "tmp.mp4"])
+	     "-y", "tmp.mp4"],
+	     check=True)
 elif strategy2:
 	process = subprocess.Popen(["ffmpeg",
 	    "-protocol_whitelist", "file,pipe",
@@ -120,11 +142,12 @@ elif strategy2:
 	    stdin=subprocess.PIPE)
 	process.stdin.writelines(
 	    b"file '%d.mp4'\n" % (i + 1) for i in range(len(labels)))
-	process.communicate()[0]
+	process.communicate()
 	process.stdin.close()
 if strategy1 or strategy2:
 	subprocess.run(["ffmpeg",
 	    "-i", "tmp.mp4",
 	    "-i", sys.argv[1],
 	    "-c", "copy",
-	    "-y", sys.argv[3]])
+	    "-y", sys.argv[3]],
+	    check=True)
