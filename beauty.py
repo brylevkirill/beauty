@@ -1,5 +1,7 @@
 import collections
+import cv2
 import datetime
+import face_recognition
 import multiprocessing.pool
 import os
 import random
@@ -13,6 +15,7 @@ strategy2 = True
 strategy2_offset = -0.0245
 drop_hard_cuts = True
 drop_hard_cuts_prob = 0.05
+drop_face_less = True
 cache_file_name = "%d.mp4"
 temp_file_name = "tmp.mp4"
 
@@ -92,7 +95,7 @@ def handle_label(l: Label, n):
 	scope = 1.0  # len(videos) / len(labels)
 	input_file_name = l.input_file_name if (
 	    l.input_file_name is not None) else (
-	    sys.argv[4 + (n * 4 + 3) % len(sys.argv[4:])])
+	    sys.argv[4 + random.randint(0, len(sys.argv[4:]) - 1)])
 	input_start_pos = l.input_start_pos if (
 	    l.input_start_pos >= 0) else (
 	    videos[input_file_name].duration * (1 - scope) * n / len(labels) +
@@ -125,6 +128,19 @@ def match_input_video(l: Label):
 		    stderr = subprocess.PIPE)
 		if "n:   0" in process.stderr.decode():
 			return False
+	if drop_face_less:
+		process = subprocess.run(["ffmpeg",
+		    "-ss", str(l.input_start_pos),
+		    "-i", l.input_file_name,
+		    "-frames:v", str(1),
+		    "-vcodec", "png",
+		    "-y", "tmp.png"],
+		    check = True)
+		frame = cv2.imread("tmp.png")
+		rgb_frame = frame[:, :, ::-1]
+		faces = face_recognition.face_locations(rgb_frame)
+		if not faces:
+			return False
 	return True
 
 def cache_input_video(l: Label, n):
@@ -145,7 +161,9 @@ def write_output_video():
 	for i in range(len(labels)):
 		while True:
 			l, label_changed = handle_label(labels[i], i)
-			if not label_changed or match_input_video(l):
+			if not label_changed:
+				break
+			elif match_input_video(l):
 				labels[i] = l
 				break
 		if strategy1:
@@ -173,6 +191,7 @@ def write_output_video():
 		    "-safe", "0",
 		    "-i", "pipe:",
 		    "-c", "copy",
+		    "-an",
 		    "-y", temp_file_name],
 		    stdin = subprocess.PIPE)
 		process.stdin.writelines(
@@ -189,9 +208,6 @@ def write_output_video():
 		    check = True)
 		os.remove(temp_file_name)
 
-def main():
+if __name__== "__main__":
 	random.seed(time.time())
 	write_output_video()
-
-if __name__== "__main__":
-	main()
