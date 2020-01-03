@@ -4,7 +4,9 @@ import datetime
 import face_recognition
 import itertools
 import madmom.audio.chroma
+import madmom.features.beats
 import madmom.features.chords
+import madmom.features.notes
 import multiprocessing.pool
 import os
 import random
@@ -26,8 +28,9 @@ strategy2 = False
 strategy2_offset = -0.0245
 drop_hard_cuts = True
 drop_hard_cuts_prob = 0.05
-drop_face_less = True
+drop_face_less = False
 create_labels_neural = False
+create_labels_length = 0.4
 create_labels_splits = 1
 create_labels_chrono = False
 
@@ -85,6 +88,41 @@ def write_labels():
 	open(labels_file_name, 'w').writelines(format_label(l) for l in labels)
 
 def create_labels(audio_file_name):
+	create_labels_from_notes(audio_file_name)
+
+def create_labels_from_notes(audio_file_name):
+	proc = madmom.features.notes.NoteOnsetPeakPickingProcessor(
+	    fps = 100,
+	    pitch_offset = 21)
+	act = madmom.features.notes.RNNPianoNoteProcessor()(audio_file_name)
+	notes = [0,
+	    *sorted(set([t for (t, _) in proc(act)])),
+	    duration(audio_file_name, "a:0")]
+	init_labels(notes)
+
+def create_labels_from_beats(audio_file_name):
+	#proc = madmom.features.beats.BeatDetectionProcessor(
+	#    look_aside = 2,
+	#    fps = 100)
+	#proc = madmom.features.beats.BeatTrackingProcessor(
+	#    look_aside = 0.2,
+	#    fps = 100)
+	#proc = madmom.features.beats.CRFBeatDetectionProcessor(
+	#    interval_sigma = 0.18,
+	#    use_factors = False,
+	#    fps = 100)
+	proc = madmom.features.beats.DBNBeatTrackingProcessor(
+	    min_bpm = 50,
+	    max_bpm = 100,
+	    transition_lambda = 1,
+	    observation_lambda = 16,
+	    correct = True,
+	    fps = 100)
+	act = madmom.features.beats.RNNBeatProcessor()(audio_file_name)
+	beats = [0, *proc(act), duration(audio_file_name, "a:0")]
+	init_labels(beats)
+
+def create_labels_from_chords(audio_file_name):
 	if create_labels_neural:
 		cfp = madmom.features.chords.CNNChordFeatureProcessor()
 		features = cfp(audio_file_name)
@@ -95,17 +133,29 @@ def create_labels(audio_file_name):
 		chroma = dcp(audio_file_name)
 		crp = madmom.features.chords.DeepChromaChordRecognitionProcessor()
 		chords = crp(chroma)
+	chords = [0] + [e for (_, e, _) in chords]
+	init_labels(chords)
+
+def init_labels(T: list):
+	T_last = [T[0]]
+	T[1:-1] = [
+	    T[i] for i in range(1, len(T) - 1)
+	    if T[i] - T_last[0] >= create_labels_length and
+	        not T_last.remove(T_last[0]) and not T_last.append(T[i])
+	]
 	global labels
 	labels = [
 	    Label(
-	        output_start_pos = s + (e - s) * i / create_labels_splits,
-	        output_end_pos = s + (e - s) * (i + 1) / create_labels_splits,
+	        output_start_pos = (T[j] +
+	            (T[j + 1] - T[j]) * i / create_labels_splits),
+	        output_end_pos = (T[j] +
+	            (T[j + 1] - T[j]) * (i + 1) / create_labels_splits),
 	        input_file_name = None,
 	        input_start_pos = -1,
 	        input_end_pos = -1
 	    )
 	    for i in range(create_labels_splits)
-	    for (s, e, _) in chords
+	    for j in range(len(T) - 1)
 	]
 
 def write_titles():
@@ -118,23 +168,26 @@ def write_titles():
 	    for i in range(len(labels))
 	)
 
+def duration(media_file_name, stream):
+	process = subprocess.run([
+	    "ffprobe",
+	    "-select_streams", stream,
+	    "-show_entries", "stream=duration",
+	    "-of", "default=noprint_wrappers=1:nokey=1",
+	    "-v", "quiet",
+	    media_file_name
+	    ],
+	    check = True,
+	    stdout = subprocess.PIPE
+	)
+	return float(process.stdout)
+
 def read_audios():
 	global labels
 	if not labels:
-		process = subprocess.run([
-		    "ffprobe",
-		    "-select_streams", "a:0",
-		    "-show_entries", "stream=duration",
-		    "-of", "default=noprint_wrappers=1:nokey=1",
-		    "-v", "quiet",
-		    audio_file_names[0]
-		    ],
-		    check = True,
-		    stdout = subprocess.PIPE
-		)
 		labels = [Label(
 		    output_start_pos = 0,
-		    output_end_pos = float(process.stdout),
+		    output_end_pos = duration(audio_file_names[0], "a:0"),
 		    input_file_name = None,
 		    input_start_pos = -1,
 		    input_end_pos = -1
@@ -150,18 +203,7 @@ def read_videos():
 		if l.input_file_name is not None:
 			videos[l.input_file_name] = None
 	for v in videos:
-		process = subprocess.run([
-		    "ffprobe",
-		    "-select_streams", "v:0",
-		    "-show_entries", "stream=duration",
-		    "-of", "default=noprint_wrappers=1:nokey=1",
-		    "-v", "quiet",
-		    v
-		    ],
-		    check = True,
-		    stdout = subprocess.PIPE
-		)
-		videos[v] = Video(duration = float(process.stdout))
+		videos[v] = Video(duration = duration(v, "v:0"))
 
 def next_input_file_name(progress):
 	return video_file_names[random.randint(0, len(video_file_names) - 1)]
