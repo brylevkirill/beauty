@@ -22,17 +22,20 @@ cache_file_names = "%d.mp4"
 tmp_video_file_name = "tmp.mp4"
 tmp_image_file_name = "tmp.png"
 
-strategy1 = True
-strategy1_offset = -0.0415
-strategy2 = False
-strategy2_offset = -0.0245
-drop_hard_cuts = True
-drop_hard_cuts_prob = 0.05
-drop_face_less = False
+create_labels_chords = False
+create_labels_beats = False
+create_labels_notes = True
 create_labels_neural = False
 create_labels_length = 0.4
 create_labels_splits = 1
 create_labels_chrono = False
+drop_hard_cuts = False
+drop_hard_cuts_prob = 0.05
+drop_face_less = False
+strategy1 = True
+strategy1_offset = -0.0415
+strategy2 = False
+strategy2_offset = -0.0245
 
 Label = collections.namedtuple("Label", """
     output_start_pos
@@ -88,15 +91,24 @@ def write_labels():
 	open(labels_file_name, 'w').writelines(format_label(l) for l in labels)
 
 def create_labels(audio_file_name):
-	create_labels_from_notes(audio_file_name)
+	if create_labels_chords:
+		create_labels_from_chords(audio_file_name)
+	elif create_labels_beats:
+		create_labels_from_beats(audio_file_name)
+	elif create_labels_notes:
+		create_labels_from_notes(audio_file_name)
 
 def create_labels_from_notes(audio_file_name):
-	proc = madmom.features.notes.NoteOnsetPeakPickingProcessor(
-	    fps = 100,
-	    pitch_offset = 21)
-	act = madmom.features.notes.RNNPianoNoteProcessor()(audio_file_name)
+	if create_labels_neural:
+		proc = madmom.features.notes.ADSRNoteTrackingProcessor()
+		act = madmom.features.notes.CNNPianoNoteProcessor()(audio_file_name)
+	else:
+		proc = madmom.features.notes.NoteOnsetPeakPickingProcessor(
+		    fps = 100,
+		    pitch_offset = 21)
+		act = madmom.features.notes.RNNPianoNoteProcessor()(audio_file_name)
 	notes = [0,
-	    *sorted(set([t for (t, _) in proc(act)])),
+	    *sorted(set([t for (t, *_) in proc(act)])),
 	    duration(audio_file_name, "a:0")]
 	init_labels(notes)
 
@@ -206,7 +218,12 @@ def read_videos():
 		videos[v] = Video(duration = duration(v, "v:0"))
 
 def next_input_file_name(progress):
-	return video_file_names[random.randint(0, len(video_file_names) - 1)]
+	pos = random.uniform(0, sum([v.duration for _, v in videos.items()]))
+	for file_name, video in videos.items():
+		pos -= video.duration
+		if pos < 0:
+			break
+	return file_name
 
 def next_input_start_pos(input_duration, output_duration, progress):
 	scope = min(1.0, len(videos) / len(labels)) if (
