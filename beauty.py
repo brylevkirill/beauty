@@ -14,13 +14,13 @@ import subprocess
 import sys
 import time
 
-labels_file_name = sys.argv[1]
-audio_file_names = [sys.argv[2]]
-video_file_names = sys.argv[3:-1]
-output_file_name = sys.argv[-1]
-cache_file_names = "%d.mp4"
-tmp_video_file_name = "tmp.mp4"
-tmp_image_file_name = "tmp.png"
+global labels_file_name
+global audio_file_names
+global video_file_names
+global output_file_name
+global cache_file_names
+global tmp_video_file_name
+global tmp_image_file_name
 
 create_labels_chords = False
 create_labels_beats = False
@@ -46,15 +46,24 @@ Label = collections.namedtuple("Label", """
     """)
 labels = []
 
-Video = collections.namedtuple("Video", "duration")
+Video = collections.namedtuple("Video", """
+    url
+    duration
+    """)
 videos = {}
 
 def parse_timestamp(s):
 	try:
 		return float(s)
-	except:
+	except ValueError:
 		pass
-	t = datetime.datetime.strptime(s, "%H:%M:%S.%f")
+	try:
+		t = datetime.datetime.strptime(s, "%H:%M:%S.%f")
+	except ValueError:
+		try:
+			t = datetime.datetime.strptime(s, "%H:%M:%S")
+		except ValueError:
+			t = datetime.datetime.strptime(s, "%M:%S")
 	return t.hour * 3600 + t.minute * 60 + t.second + t.microsecond * 0.000001
 
 def format_timestamp(t):
@@ -145,7 +154,7 @@ def create_labels_from_chords(audio_file_name):
 		chroma = dcp(audio_file_name)
 		crp = madmom.features.chords.DeepChromaChordRecognitionProcessor()
 		chords = crp(chroma)
-	chords = [0] + [e for (_, e, _) in chords]
+	chords = [0] + [e for (_, e, *_) in chords]
 	init_labels(chords)
 
 def init_labels(T: list):
@@ -209,13 +218,35 @@ def read_audios():
 def read_videos():
 	global videos
 	videos = {}
-	for v in video_file_names:
-		videos[v] = None
 	for l in labels:
 		if l.input_file_name is not None:
-			videos[l.input_file_name] = None
-	for v in videos:
-		videos[v] = Video(duration = duration(v, "v:0"))
+			video_file_names.append(l.input_file_name)
+	for v in video_file_names:
+		if "youtube.com" in v or "youtu.be" in v:
+			process = subprocess.run([
+			    "youtube-dl",
+			    "--get-id",
+			    "--get-url",
+			    "--get-duration",
+			    "-f", "bestvideo[ext=mp4][height=1080][fps<=30]",
+			    v
+			    ],
+			    check = True,
+			    stdout = subprocess.PIPE
+			)
+			output = process.stdout.decode().splitlines()
+			videos.update(dict((
+			    "http://youtu.be/" + id,
+			    Video(
+			        url = url,
+			        duration = parse_timestamp(duration)
+			    ))
+			    for (id, url, duration) in zip(*[iter(output)] * 3)
+			))
+		else:
+			videos[v] = Video(
+			    url = v,
+			    duration = duration(v, "v:0"))
 
 def next_input_file_name(progress):
 	pos = random.uniform(0, sum([v.duration for _, v in videos.items()]))
@@ -263,7 +294,7 @@ def match_label(l: Label):
 		process = subprocess.run([
 		    "ffmpeg",
 		    "-ss", str((l.input_start_pos + l.input_end_pos) / 2),
-		    "-i", l.input_file_name,
+		    "-i", videos[l.input_file_name].url,
 		    "-frames:v", str(1),
 		    "-vcodec", "png",
 		    "-y", tmp_image_file_name
@@ -281,7 +312,7 @@ def match_label(l: Label):
 		    "ffmpeg",
 		    "-ss", str(l.input_start_pos),
 		    "-t", str(l.input_end_pos - l.input_start_pos),
-		    "-i", l.input_file_name,
+		    "-i", videos[l.input_file_name].url,
 		    "-filter:v",
 		        "select='gt(scene,%f)',showinfo" % drop_hard_cuts_prob,
 		    "-f", "null",
@@ -299,7 +330,7 @@ def cache_input(l: Label, n):
 	    "ffmpeg",
 	    "-ss", str(l.input_start_pos),
 	    "-t", str(l.input_end_pos - l.input_start_pos + strategy2_offset),
-	    "-i", l.input_file_name,
+	    "-i", videos[l.input_file_name].url,
 	    "-filter_complex", "concat=n=1",
 	    "-an",
 	    "-y", cache_file_names % (n + 1)
@@ -334,7 +365,7 @@ def write_output():
 		        "-ss", str(l.input_start_pos),
 		        "-t", str(l.input_end_pos - l.input_start_pos +
 		            strategy1_offset),
-		        "-i", l.input_file_name
+		        "-i", videos[l.input_file_name].url
 		        ] for l in labels
                     )) + [
 		    "-filter_complex", "concat=n=%d" % len(labels),
@@ -377,7 +408,24 @@ def write_output():
 		)
 		os.remove(tmp_video_file_name)
 
+def process_options():
+	global labels_file_name
+	labels_file_name = sys.argv[1]
+	global audio_file_names
+	audio_file_names = [sys.argv[2]]
+	global video_file_names
+	video_file_names = sys.argv[3:-1]
+	global output_file_name
+	output_file_name = sys.argv[-1]
+	global cache_file_names
+	cache_file_names = "%d.mp4"
+	global tmp_video_file_name
+	tmp_video_file_name = "tmp.mp4"
+	global tmp_image_file_name
+	tmp_image_file_name = "tmp.png"
+
 if __name__== "__main__":
+	process_options()
 	random.seed(time.time())
 	read_labels()
 	if not labels:
