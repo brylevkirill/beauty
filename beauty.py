@@ -1,7 +1,7 @@
 import collections
 import cv2
 import datetime
-import face_recognition
+import dlib
 import itertools
 import madmom.audio.chroma
 import madmom.features.beats
@@ -12,15 +12,15 @@ import os
 import random
 import subprocess
 import sys
+import tempfile
 import time
 
 global labels_file_name
 global audio_file_names
 global video_file_names
 global output_file_name
-global cache_file_names
+global cache_file_name
 global tmp_video_file_name
-global tmp_image_file_name
 
 create_labels_chords = False
 create_labels_beats = False
@@ -29,12 +29,12 @@ create_labels_neural = False
 create_labels_length = 0.4
 create_labels_splits = 1
 create_labels_chrono = False
-drop_hard_cuts = False
+drop_hard_cuts = True
 drop_hard_cuts_prob = 0.05
-drop_face_less = False
-strategy1 = True
+drop_face_less = True
+strategy1 = False
 strategy1_offset = -0.0415
-strategy2 = False
+strategy2 = True
 strategy2_offset = -0.0245
 
 Label = collections.namedtuple("Label", """
@@ -44,13 +44,13 @@ Label = collections.namedtuple("Label", """
     input_start_pos
     input_end_pos
     """)
-labels = []
+labels = multiprocessing.Manager().list()
 
 Video = collections.namedtuple("Video", """
     url
     duration
     """)
-videos = {}
+videos = multiprocessing.Manager().dict()
 
 def parse_timestamp(s):
 	try:
@@ -92,7 +92,7 @@ def format_label(l: Label):
 
 def read_labels():
 	global labels
-	labels = [parse_label(s) for s in
+	labels[:] = [parse_label(s) for s in
 	    open(labels_file_name).read().splitlines()
 	    ] if os.path.isfile(labels_file_name) else []
 
@@ -165,7 +165,7 @@ def init_labels(T: list):
 	        not T_last.remove(T_last[0]) and not T_last.append(T[i])
 	]
 	global labels
-	labels = [
+	labels[:] = [
 	    Label(
 	        output_start_pos = (T[j] +
 	            (T[j + 1] - T[j]) * i / create_labels_splits),
@@ -201,12 +201,12 @@ def duration(media_file_name, stream):
 	    check = True,
 	    stdout = subprocess.PIPE
 	)
-	return float(process.stdout)
+	return float(process.stdout.decode())
 
 def read_audios():
 	global labels
 	if not labels:
-		labels = [Label(
+		labels[:] = [Label(
 		    output_start_pos = 0,
 		    output_end_pos = duration(audio_file_names[0], "a:0"),
 		    input_file_name = None,
@@ -215,38 +215,43 @@ def read_audios():
 		)]
 		write_labels()
 
+def read_video(video_file_name):
+	if "youtube.com" in video_file_name or "youtu.be" in video_file_name:
+		process = subprocess.run([
+		    "youtube-dl",
+		    "--get-id",
+		    "--get-url",
+		    "--get-duration",
+		    "-f", "bestvideo[ext=mp4][height=1080]",
+		    video_file_name
+		    ],
+		    check = True,
+		    stdout = subprocess.PIPE
+		)
+		output = process.stdout.decode().splitlines()
+		videos.update(dict((
+		    "http://youtu.be/" + id,
+		    Video(
+		        url = url,
+		        duration = parse_timestamp(duration)
+		    ))
+		    for (id, url, duration) in zip(*[iter(output)] * 3)
+		))
+	else:
+		videos[video_file_name] = Video(
+		    url = video_file_name,
+		    duration = duration(video_file_name, "v:0"))
+
 def read_videos():
-	global videos
-	videos = {}
 	for l in labels:
-		if l.input_file_name is not None:
+		if (l.input_file_name is not None and
+		    l.input_file_name not in video_file_names):
 			video_file_names.append(l.input_file_name)
+	pool = multiprocessing.pool.ThreadPool(len(video_file_names))
 	for v in video_file_names:
-		if "youtube.com" in v or "youtu.be" in v:
-			process = subprocess.run([
-			    "youtube-dl",
-			    "--get-id",
-			    "--get-url",
-			    "--get-duration",
-			    "-f", "bestvideo[ext=mp4][height=1080][fps<=30]",
-			    v
-			    ],
-			    check = True,
-			    stdout = subprocess.PIPE
-			)
-			output = process.stdout.decode().splitlines()
-			videos.update(dict((
-			    "http://youtu.be/" + id,
-			    Video(
-			        url = url,
-			        duration = parse_timestamp(duration)
-			    ))
-			    for (id, url, duration) in zip(*[iter(output)] * 3)
-			))
-		else:
-			videos[v] = Video(
-			    url = v,
-			    duration = duration(v, "v:0"))
+		pool.apply_async(read_video, (v,))
+	pool.close()
+	pool.join()
 
 def next_input_file_name(progress):
 	pos = random.uniform(0, sum([v.duration for _, v in videos.items()]))
@@ -289,39 +294,44 @@ def update_label(l: Label, progress):
 	    input_end_pos
 	    ), label_changed
 
+def match_label_hard_cuts(l: Label):
+	process = subprocess.run([
+	    "ffmpeg",
+	    "-ss", str(l.input_start_pos),
+	    "-t", str(l.input_end_pos - l.input_start_pos),
+	    "-i", videos[l.input_file_name].url,
+	    "-filter:v",
+	        "select='gt(scene,%f)',showinfo" % drop_hard_cuts_prob,
+	    "-f", "null",
+	    "-"
+	    ],
+	    check = True,
+	    stderr = subprocess.PIPE
+	)
+	return "n:   0" not in process.stderr.decode()
+
+def match_label_face_less(l: Label):
+	_, frame_file_name = tempfile.mkstemp(suffix = ".png")
+	process = subprocess.run([
+	    "ffmpeg",
+	    "-ss", str((l.input_start_pos + l.input_end_pos) / 2),
+	    "-i", videos[l.input_file_name].url,
+	    "-frames:v", str(1),
+	    "-vcodec", "png",
+	    "-y", frame_file_name
+	    ],
+	    check = True
+	)
+	frame = cv2.cvtColor(cv2.imread(frame_file_name), cv2.COLOR_BGR2RGB)
+	os.remove(frame_file_name)
+	return not not dlib.get_frontal_face_detector()(frame)
+
 def match_label(l: Label):
 	if drop_face_less:
-		process = subprocess.run([
-		    "ffmpeg",
-		    "-ss", str((l.input_start_pos + l.input_end_pos) / 2),
-		    "-i", videos[l.input_file_name].url,
-		    "-frames:v", str(1),
-		    "-vcodec", "png",
-		    "-y", tmp_image_file_name
-		    ],
-		    check = True
-		)
-		frame = cv2.imread(tmp_image_file_name)
-		os.remove(tmp_image_file_name)
-		rgb_frame = frame[:, :, ::-1]
-		faces = face_recognition.face_locations(rgb_frame)
-		if not faces:
+		if not match_label_face_less(l):
 			return False
 	if drop_hard_cuts:
-		process = subprocess.run([
-		    "ffmpeg",
-		    "-ss", str(l.input_start_pos),
-		    "-t", str(l.input_end_pos - l.input_start_pos),
-		    "-i", videos[l.input_file_name].url,
-		    "-filter:v",
-		        "select='gt(scene,%f)',showinfo" % drop_hard_cuts_prob,
-		    "-f", "null",
-		    "-"
-		    ],
-		    check = True,
-		    stderr = subprocess.PIPE
-		)
-		if "n:   0" in process.stderr.decode():
+		if not match_label_hard_cuts(l):
 			return False
 	return True
 
@@ -333,29 +343,34 @@ def cache_input(l: Label, n):
 	    "-i", videos[l.input_file_name].url,
 	    "-filter_complex", "concat=n=1",
 	    "-an",
-	    "-y", cache_file_names % (n + 1)
+	    "-y", cache_file_name % (n + 1)
 	    ],
 	    check = True
 	)
 
+def check_label(n):
+	while True:
+		label, label_changed = update_label(labels[n], n / len(labels))
+		if not label_changed:
+			break
+		elif match_label(label):
+			labels[n] = label
+			break
+	if label_changed:
+		write_labels()
+	if strategy2 and (
+	    label_changed or
+	    not os.path.isfile(cache_file_name % (n + 1))
+	):
+		cache_input(labels[n], n)
+
 def create_output():
-	global cache_input_tasks
-	cache_input_tasks = multiprocessing.pool.ThreadPool(os.cpu_count() // 2)
+	global labels
+	pool = multiprocessing.pool.Pool(os.cpu_count())
 	for i in range(len(labels)):
-		while True:
-			l, label_changed = update_label(labels[i], i / len(labels))
-			if not label_changed:
-				break
-			elif match_label(l):
-				labels[i] = l
-				break
-		if label_changed:
-			write_labels()
-		if strategy2 and (
-		    label_changed or
-		    not os.path.isfile(cache_file_names % (i + 1))
-		):
-			cache_input_tasks.apply_async(cache_input, (l, i))
+		pool.apply_async(check_label, (i,))
+	pool.close()
+	pool.join()
 
 def write_output():
 	if strategy1:
@@ -375,9 +390,6 @@ def write_output():
 		    check = True
 		)
 	elif strategy2:
-		global cache_input_tasks
-		cache_input_tasks.close()
-		cache_input_tasks.join()
 		process = subprocess.Popen([
 		    "ffmpeg",
 		    "-protocol_whitelist", "file,pipe",
@@ -391,7 +403,7 @@ def write_output():
 		    stdin = subprocess.PIPE
 		)
 		process.stdin.writelines(
-		    ("file '%s'\n" % cache_file_names % (i + 1)).encode()
+		    ("file '%s'\n" % cache_file_name % (i + 1)).encode()
 		    for i in range(len(labels))
 		)
 		process.communicate()
@@ -417,12 +429,10 @@ def process_options():
 	video_file_names = sys.argv[3:-1]
 	global output_file_name
 	output_file_name = sys.argv[-1]
-	global cache_file_names
-	cache_file_names = "%d.mp4"
+	global cache_file_name
+	cache_file_name = "%d.mp4"
 	global tmp_video_file_name
 	tmp_video_file_name = "tmp.mp4"
-	global tmp_image_file_name
-	tmp_image_file_name = "tmp.png"
 
 if __name__== "__main__":
 	process_options()
