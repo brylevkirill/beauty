@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import validators
 
 global labels_file_name
 global audio_file_names
@@ -29,9 +30,9 @@ create_labels_neural = False
 create_labels_length = 0.4
 create_labels_splits = 1
 create_labels_chrono = False
-drop_hard_cuts = True
+drop_hard_cuts = False
 drop_hard_cuts_prob = 0.05
-drop_face_less = True
+drop_face_less = False
 strategy1 = False
 strategy1_offset = -0.0415
 strategy2 = True
@@ -71,10 +72,13 @@ def format_timestamp(t):
 
 def parse_label(s):
 	t = s.split('\t')
+	if (t[2:] and t[2].strip() and
+	    not os.path.isfile(t[2]) and not validators.url(t[2])):
+		raise ValueError("invalid value '%s'" % t[2:])
 	return Label(
 	    output_start_pos = parse_timestamp(t[0]),
 	    output_end_pos = parse_timestamp(t[1]),
-	    input_file_name = t[2] if t[2:] and os.path.isfile(t[2]) else None,
+	    input_file_name = t[2] if t[2:] and t[2].strip() else None,
 	    input_start_pos = parse_timestamp(t[3]) if t[3:] else -1,
 	    input_end_pos = parse_timestamp(t[4]) if t[4:] else -1
 	)
@@ -223,6 +227,7 @@ def read_video(video_file_name):
 		    "--get-url",
 		    "--get-duration",
 		    "-f", "bestvideo[ext=mp4][height=1080]",
+		    "--youtube-skip-dash-manifest",
 		    video_file_name
 		    ],
 		    check = True,
@@ -241,19 +246,43 @@ def read_video(video_file_name):
 		videos[video_file_name] = Video(
 		    url = video_file_name,
 		    duration = duration(video_file_name, "v:0"))
+	return True
 
 def read_videos():
+	for v in video_file_names[:]:
+		if "youtube.com/playlist" in v or v.startswith("ytsearch"):
+			process = subprocess.run([
+			    "youtube-dl",
+			    "--get-title",
+			    "--get-id",
+			    "--flat-playlist",
+			    v
+			    ],
+			    check = True,
+			    stdout = subprocess.PIPE
+			)
+			output = process.stdout.decode().splitlines()
+			video_file_names.remove(v)
+			for (title, id) in zip(*[iter(output)] * 2):
+				if (v.startswith("ytsearch") and
+				    any (word not in title
+				    for word in v[v.index(':') + 1:].split()
+				)):
+					continue
+				video_file_names.append("http://youtu.be/" + id)
 	for l in labels:
 		if (l.input_file_name is not None and
 		    l.input_file_name not in video_file_names):
 			video_file_names.append(l.input_file_name)
 	pool = multiprocessing.pool.ThreadPool(len(video_file_names))
-	for v in video_file_names:
-		pool.apply_async(read_video, (v,))
+	res = [pool.apply_async(read_video, (v,)) for v in video_file_names]
 	pool.close()
 	pool.join()
+	assert all(r.get() for r in res)
 
 def next_input_file_name(progress):
+	if not videos:
+		return None
 	pos = random.uniform(0, sum([v.duration for _, v in videos.items()]))
 	for file_name, video in videos.items():
 		pos -= video.duration
@@ -274,12 +303,13 @@ def update_label(l: Label, progress):
 	    l.input_file_name is not None) else (
 	    next_input_file_name(progress))
 	input_start_pos = l.input_start_pos if (
-	    l.input_start_pos >= 0) else (
+	    input_file_name is None or l.input_start_pos >= 0) else (
 	    next_input_start_pos(
 	        videos[input_file_name].duration,
 	        l.output_end_pos - l.output_start_pos,
 	        progress))
 	input_end_pos = l.input_end_pos if (
+	    input_file_name is None or
 	    l.input_start_pos >= 0 and l.input_end_pos >= 0) else (
 	    input_start_pos + (l.output_end_pos - l.output_start_pos))
 	label_changed = (
@@ -294,12 +324,12 @@ def update_label(l: Label, progress):
 	    input_end_pos
 	    ), label_changed
 
-def match_label_hard_cuts(l: Label):
+def match_label_hard_cuts(l: Label, v: Video):
 	process = subprocess.run([
 	    "ffmpeg",
 	    "-ss", str(l.input_start_pos),
 	    "-t", str(l.input_end_pos - l.input_start_pos),
-	    "-i", videos[l.input_file_name].url,
+	    "-i", v.url,
 	    "-filter:v",
 	        "select='gt(scene,%f)',showinfo" % drop_hard_cuts_prob,
 	    "-f", "null",
@@ -310,12 +340,12 @@ def match_label_hard_cuts(l: Label):
 	)
 	return "n:   0" not in process.stderr.decode()
 
-def match_label_face_less(l: Label):
+def match_label_face_less(l: Label, v: Video):
 	_, frame_file_name = tempfile.mkstemp(suffix = ".png")
 	process = subprocess.run([
 	    "ffmpeg",
 	    "-ss", str((l.input_start_pos + l.input_end_pos) / 2),
-	    "-i", videos[l.input_file_name].url,
+	    "-i", v.url,
 	    "-frames:v", str(1),
 	    "-vcodec", "png",
 	    "-y", frame_file_name
@@ -326,12 +356,12 @@ def match_label_face_less(l: Label):
 	os.remove(frame_file_name)
 	return not not dlib.get_frontal_face_detector()(frame)
 
-def match_label(l: Label):
+def match_label(l: Label, v: Video):
 	if drop_face_less:
-		if not match_label_face_less(l):
+		if not match_label_face_less(l, v):
 			return False
 	if drop_hard_cuts:
-		if not match_label_hard_cuts(l):
+		if not match_label_hard_cuts(l, v):
 			return False
 	return True
 
@@ -353,24 +383,40 @@ def check_label(n):
 		label, label_changed = update_label(labels[n], n / len(labels))
 		if not label_changed:
 			break
-		elif match_label(label):
-			labels[n] = label
-			break
+		if strategy2:
+			cache_input(label, n)
+			duration = label.output_end_pos - label.output_start_pos
+			cache_label = Label(
+			    output_start_pos = label.output_start_pos,
+			    output_end_pos = label.output_end_pos,
+			    input_file_name = cache_file_name % (n + 1),
+			    input_start_pos = 0,
+			    input_end_pos = duration
+			)
+			cache_video = Video(
+			    url = cache_file_name % (n + 1),
+			    duration = duration
+			)
+			if match_label(cache_label, cache_video):
+				labels[n] = label
+				break
+		else:
+			if match_label(label, videos[label.input_file_name]):
+				labels[n] = label
+				break
 	if label_changed:
 		write_labels()
-	if strategy2 and (
-	    label_changed or
-	    not os.path.isfile(cache_file_name % (n + 1))
-	):
-		cache_input(labels[n], n)
+	else:
+		if strategy2 and not os.path.isfile(cache_file_name % (n + 1)):
+			cache_input(labels[n], n)
+	return True
 
 def create_output():
-	global labels
 	pool = multiprocessing.pool.Pool(os.cpu_count())
-	for i in range(len(labels)):
-		pool.apply_async(check_label, (i,))
+	res = [pool.apply_async(check_label, (i,)) for i in range(len(labels))]
 	pool.close()
 	pool.join()
+	assert all(r.get() for r in res)
 
 def write_output():
 	if strategy1:
