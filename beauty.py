@@ -23,13 +23,20 @@ output_file_name = sys.argv[-1]
 cache_file_name = "%d.mp4"
 tmp_video_file_name = "tmp.mp4"
 
-create_labels_chords = True
-create_labels_beats = False
-create_labels_notes = False
-create_labels_neural = False
-create_labels_length = 0.4
-create_labels_splits = 1
-create_labels_chrono = False
+create_labels_length_minima = 0.4
+create_labels_from_chords = True
+create_labels_from_chords_chroma = True
+create_labels_from_chords_cnn = False
+create_labels_from_beats = False
+create_labels_from_beats_join_size = 4
+create_labels_from_beats_detection = False
+create_labels_from_beats_detection_crf = False
+create_labels_from_beats_tracking = False
+create_labels_from_beats_tracking_dbn = True
+create_labels_from_notes = False
+create_labels_from_notes_rnn = True
+create_labels_from_notes_cnn = False
+select_videos_chrono = False
 drop_hard_cuts = False
 drop_hard_cuts_prob = 0.05
 drop_slow_pace = False
@@ -108,83 +115,105 @@ def labels_created():
 	return all (l.input_file_name is not None for l in labels)
 
 def create_labels(audio_file_name):
-	if create_labels_chords:
-		create_labels_from_chords(audio_file_name)
-	elif create_labels_beats:
-		create_labels_from_beats(audio_file_name)
-	elif create_labels_notes:
-		create_labels_from_notes(audio_file_name)
-
-def create_labels_from_notes(audio_file_name):
-	if create_labels_neural:
-		proc = madmom.features.notes.ADSRNoteTrackingProcessor()
-		act = madmom.features.notes.CNNPianoNoteProcessor()(audio_file_name)
-	else:
-		proc = madmom.features.notes.NoteOnsetPeakPickingProcessor(
-		    fps = 100,
-		    pitch_offset = 21)
-		act = madmom.features.notes.RNNPianoNoteProcessor()(audio_file_name)
-	notes = [0,
-	    *sorted(set([t for (t, *_) in proc(act)])),
-	    duration(audio_file_name, "a:0")]
-	init_labels(notes)
-
-def create_labels_from_beats(audio_file_name):
-	#proc = madmom.features.beats.BeatDetectionProcessor(
-	#    look_aside = 2,
-	#    fps = 100)
-	#proc = madmom.features.beats.BeatTrackingProcessor(
-	#    look_aside = 0.2,
-	#    fps = 100)
-	#proc = madmom.features.beats.CRFBeatDetectionProcessor(
-	#    interval_sigma = 0.18,
-	#    use_factors = False,
-	#    fps = 100)
-	proc = madmom.features.beats.DBNBeatTrackingProcessor(
-	    min_bpm = 50,
-	    max_bpm = 100,
-	    transition_lambda = 1,
-	    observation_lambda = 16,
-	    correct = True,
-	    fps = 100)
-	act = madmom.features.beats.RNNBeatProcessor()(audio_file_name)
-	beats = [0, *proc(act), duration(audio_file_name, "a:0")]
-	init_labels(beats)
-
-def create_labels_from_chords(audio_file_name):
-	if create_labels_neural:
-		cfp = madmom.features.chords.CNNChordFeatureProcessor()
-		features = cfp(audio_file_name)
-		crp = madmom.features.chords.CRFChordRecognitionProcessor()
-		chords = crp(features)
-	else:
-		dcp = madmom.audio.chroma.DeepChromaProcessor()
-		chroma = dcp(audio_file_name)
-		crp = madmom.features.chords.DeepChromaChordRecognitionProcessor()
-		chords = crp(chroma)
-	chords = [0] + [e for (_, e, *_) in chords]
-	init_labels(chords)
-
-def init_labels(T: list):
-	T_last = [T[0]]
-	T[1:-1] = [
-	    T[i] for i in range(1, len(T) - 1)
-	    if T[i] - T_last[0] >= create_labels_length and
-	        not T_last.remove(T_last[0]) and not T_last.append(T[i])
+	L = sorted(set([
+	    0,
+	    *(labels_from_chords(audio_file_name)
+	        if create_labels_from_chords else []),
+	    *(labels_from_beats(audio_file_name)
+	        if create_labels_from_beats else []),
+	    *(labels_from_notes(audio_file_name)
+	        if create_labels_from_notes else []),
+	    duration(audio_file_name, "a:0")
+	]))
+	L_last = [L[0]]
+	L[1:-1] = [
+	    L[i] for i in range(1, len(L) - 1)
+	    if L[i] - L_last[0] >= create_labels_length_minima and
+	        not L_last.remove(L_last[0]) and not L_last.append(L[i])
 	]
 	labels[:] = [
 	    Label(
-	        output_start_pos = (T[j] +
-	            (T[j + 1] - T[j]) * i / create_labels_splits),
-	        output_end_pos = (T[j] +
-	            (T[j + 1] - T[j]) * (i + 1) / create_labels_splits),
+	        output_start_pos = L[i],
+	        output_end_pos = L[i + 1],
 	        input_file_name = None,
 	        input_start_pos = -1,
 	        input_end_pos = -1
 	    )
-	    for i in range(create_labels_splits)
-	    for j in range(len(T) - 1)
+	    for i in range(len(L) - 1)
 	]
+
+def labels_from_chords(audio_file_name):
+	proc = []
+	feat = []
+	if create_labels_from_chords_chroma:
+		proc.append(
+		    madmom.features.chords.DeepChromaChordRecognitionProcessor()
+		)
+		feat.append(madmom.audio.chroma.DeepChromaProcessor()(
+		    audio_file_name
+		))
+	if create_labels_from_chords_cnn:
+		proc.append(
+		    madmom.features.chords.CRFChordRecognitionProcessor()
+		)
+		feat.append(madmom.features.chords.CNNChordFeatureProcessor()(
+		    audio_file_name
+		))
+	return set(itertools.chain.from_iterable(
+	    (e for (_, e, _) in p(f)) for (p, f) in zip(proc, feat)
+	))
+
+def labels_from_beats(audio_file_name):
+	proc = []
+	if create_labels_from_beats_detection:
+		proc.append(madmom.features.beats.BeatDetectionProcessor(
+		    look_aside = 0.2,
+		    fps = 100
+		))
+	if create_labels_from_beats_detection_crf:
+		proc.append(madmom.features.beats.CRFBeatDetectionProcessor(
+		    interval_sigma = 0.18,
+		    use_factors = False,
+		    fps = 100
+		))
+	if create_labels_from_beats_tracking:
+		proc.append(madmom.features.beats.BeatTrackingProcessor(
+		    look_aside = 0.2,
+		    fps = 100
+		))
+	if create_labels_from_beats_tracking_dbn:
+		proc.append(madmom.features.beats.DBNBeatTrackingProcessor(
+		    min_bpm = 50,
+		    max_bpm = 100,
+		    transition_lambda = 1,
+		    observation_lambda = 16,
+		    correct = True,
+		    fps = 100
+		))
+	return set(itertools.chain.from_iterable(
+	    p(madmom.features.beats.RNNBeatProcessor()(
+	        audio_file_name))[::create_labels_from_beats_join_size]
+	    for p in proc))
+
+def labels_from_notes(audio_file_name):
+	proc = []
+	act = []
+	if create_labels_from_notes_rnn:
+		proc.append(madmom.features.notes.NoteOnsetPeakPickingProcessor(
+		    fps = 100,
+		    pitch_offset = 21
+		))
+		act.append(madmom.features.notes.RNNPianoNoteProcessor()(
+		    audio_file_name
+		))
+	if create_labels_from_notes_cnn:
+		proc.append(madmom.features.notes.ADSRNoteTrackingProcessor())
+		act.append(madmom.features.notes.CNNPianoNoteProcessor()(
+		    audio_file_name
+		))
+	return set(itertools.chain.from_iterable(
+	    (t for (t, *_) in p(a)) for (p, a) in zip(proc, act)
+	))
 
 def write_titles():
 	open(output_file_name + ".srt", 'w').writelines(
@@ -284,9 +313,10 @@ def read_video(video_file_name, strict = True):
 	else:
 		videos[video_file_name] = Video(
 		    url = video_file_name,
-		    duration = duration(video_file_name, "v:0"))
+		    duration = duration(video_file_name, "v:0")
+		)
 
-def read_playlist(url):
+def youtube_playlist(url):
 	process = subprocess.run([
 	    "youtube-dl",
 	    "--get-title",
@@ -298,13 +328,15 @@ def read_playlist(url):
 	    stdout = subprocess.PIPE
 	)
 	output = process.stdout.decode().splitlines()
-	for (title, id) in zip(*[iter(output)] * 2):
-		if (url.startswith("ytsearch") and
-		    any (word.lower() not in title.lower()
-		    for word in url[url.index(':') + 1:].split()
-		)):
-			continue
-		video_file_names.append("http://youtu.be/" + id)
+	return [
+	    "http://youtu.be/" + id
+	    for (title, id) in zip(*[iter(output)] * 2)
+	    if (url.startswith("ytsearch") and
+	        any (word.lower() not in title.lower()
+	            for word in url[url.index(':') + 1:].split()
+		)
+	    )
+	]
 
 def read_videos():
 	if not video_file_names:
@@ -312,7 +344,7 @@ def read_videos():
 	for v in list(video_file_names):
 		if "youtube.com/playlist" in v or v.startswith("ytsearch"):
 			video_file_names.remove(v)
-			read_playlist(v)
+			video_file_names.extend(youtube_playlist(v))
 	for l in labels:
 		if (l.input_file_name is not None and
 		    l.input_file_name not in video_file_names):
@@ -320,7 +352,8 @@ def read_videos():
 	pool = multiprocessing.pool.ThreadPool(len(video_file_names))
 	res = [
 	    pool.apply_async(read_video, (v, False))
-	    for v in video_file_names]
+	    for v in video_file_names
+	]
 	pool.close()
 	pool.join()
 	assert all(r.get() is None for r in res)
@@ -337,7 +370,7 @@ def next_input_file_name(progress):
 
 def next_input_start_pos(input_duration, output_duration, progress):
 	scope = min(1.0, len(videos) / len(labels)) if (
-	    create_labels_chrono) else 1.0
+	    select_videos_chrono) else 1.0
 	return (
 	    input_duration * (1 - scope) * progress +
 	    random.uniform(0, input_duration * scope - output_duration)
