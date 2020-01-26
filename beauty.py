@@ -1,3 +1,4 @@
+import argparse
 import collections
 import cv2
 import datetime
@@ -16,12 +17,14 @@ import tempfile
 import time
 import validators
 
-labels_file_name = sys.argv[1]
-audio_file_names = [sys.argv[2]]
-video_file_names = sys.argv[3:-1]
-output_file_name = sys.argv[-1]
-cache_file_name = "%d.mp4"
-tmp_video_file_name = "tmp.mp4"
+parser = argparse.ArgumentParser()
+parser.add_argument("-f", "--fromscratch", action = "store_true")
+parser.add_argument("-i", "--incremental", action = "store_true")
+parser.add_argument("-l", "--labels", metavar = "<labels file>", required = True)
+parser.add_argument("-v", "--video", metavar = "<video file|URL>", nargs = "+")
+parser.add_argument("-a", "--audio", metavar= "<audio file>")
+parser.add_argument("-o", "--output", metavar = "<output file>")
+args = parser.parse_args()
 
 create_labels_length_minima = 0.4
 create_labels_from_chords = True
@@ -43,10 +46,11 @@ drop_slow_pace = False
 drop_slow_pace_prob = 0.02
 drop_slow_pace_part = 0.2
 drop_face_less = False
-strategy1 = False
-strategy1_offset = -0.0415
-strategy2 = True
-strategy2_offset = -0.0245
+offset_fromscratch = -0.0415
+offset_incremental = -0.0245
+offset_mixed = -0.045
+cache_file_name = "%d.mp4"
+tmp_video_file_name = "tmp.mp4"
 
 Label = collections.namedtuple("Label", """
     output_start_pos
@@ -83,7 +87,7 @@ def format_timestamp(t):
 def parse_label(s):
 	t = s.split('\t')
 	if t[2:] and not os.path.isfile(t[2]) and not validators.url(t[2]):
-		raise ValueError("invalid value '%s'" % t[2:])
+		raise ValueError("Invalid value '%s'." % t[2:])
 	return Label(
 	    output_start_pos = parse_timestamp(t[0]),
 	    output_end_pos = parse_timestamp(t[1]),
@@ -105,14 +109,18 @@ def format_label(l: Label):
 
 def read_labels():
 	labels[:] = [parse_label(s) for s in
-	    open(labels_file_name).read().splitlines()
-	    ] if os.path.isfile(labels_file_name) else []
+	    open(args.labels).read().splitlines()
+	    ] if os.path.isfile(args.labels) else []
 
 def write_labels():
-	open(labels_file_name, 'w').writelines(format_label(l) for l in labels)
+	open(args.labels, 'w').writelines(format_label(l) for l in labels)
 
 def labels_created():
-	return all (l.input_file_name is not None for l in labels)
+	return all (
+	    l.input_file_name is not None and
+	    l.input_start_pos != -1 and
+	    l.input_end_pos != -1
+	    for l in labels)
 
 def create_labels(audio_file_name):
 	L = sorted(set([
@@ -216,7 +224,7 @@ def labels_from_notes(audio_file_name):
 	))
 
 def write_titles():
-	open(output_file_name + ".srt", 'w').writelines(
+	open(args.output + ".srt", 'w').writelines(
 	    "%d\n%s --> %s\n%d\n\n" % (
 	        i + 1,
 	        format_timestamp(labels[i].output_start_pos),
@@ -248,17 +256,6 @@ def duration(media_file_name, stream):
 
 def frames_number(video_file_name):
 	return property(video_file_name, "v:0", "nb_frames")
-
-def read_audios():
-	if not labels:
-		labels[:] = [Label(
-		    output_start_pos = 0,
-		    output_end_pos = duration(audio_file_names[0], "a:0"),
-		    input_file_name = None,
-		    input_start_pos = -1,
-		    input_end_pos = -1
-		)]
-		write_labels()
 
 def check_media_url(url):
 	process = subprocess.run([
@@ -301,7 +298,7 @@ def youtube_video(url, strict = True):
 	    if check_media_url(url)
 	]
 	if strict and not variants:
-		raise Exception("can't read '%s'" % url)
+		raise Exception("Can't read '%s'." % url)
 	return variants[0] if variants else None
 
 def read_video(video_file_name, strict = True):
@@ -339,21 +336,18 @@ def youtube_playlist(url):
 	]
 
 def read_videos():
-	if not video_file_names:
-		raise Exception("no video files given")
-	for v in list(video_file_names):
+	if not args.video:
+		raise Exception("No video file names or URLs given.")
+	for v in list(args.video):
 		if "youtube.com/playlist" in v or v.startswith("ytsearch"):
-			video_file_names.remove(v)
-			video_file_names.extend(youtube_playlist(v))
+			args.video.remove(v)
+			args.video.extend(youtube_playlist(v))
 	for l in labels:
 		if (l.input_file_name is not None and
-		    l.input_file_name not in video_file_names):
-			video_file_names.append(l.input_file_name)
-	pool = multiprocessing.pool.ThreadPool(len(video_file_names))
-	res = [
-	    pool.apply_async(read_video, (v, False))
-	    for v in video_file_names
-	]
+		    l.input_file_name not in args.video):
+			args.video.append(l.input_file_name)
+	pool = multiprocessing.pool.ThreadPool(len(args.video))
+	res = [pool.apply_async(read_video, (v, False)) for v in args.video]
 	pool.close()
 	pool.join()
 	assert all(r.get() is None for r in res)
@@ -469,7 +463,7 @@ def cache_input(l: Label, n):
 	subprocess.run([
 	    "ffmpeg",
 	    "-ss", str(l.input_start_pos),
-	    "-t", str(l.input_end_pos - l.input_start_pos + strategy2_offset),
+	    "-t", str(l.input_end_pos - l.input_start_pos + offset_incremental),
 	    "-i", videos[l.input_file_name].url,
 	    "-filter_complex", "concat=n=1",
 	    "-an",
@@ -483,7 +477,7 @@ def check_label(n):
 		label, label_changed = update_label(labels[n], n / len(labels))
 		if not label_changed:
 			break
-		if strategy2:
+		if args.incremental:
 			cache_input(label, n)
 			duration = label.output_end_pos - label.output_start_pos
 			cache_label = Label(
@@ -506,77 +500,159 @@ def check_label(n):
 				break
 	if label_changed:
 		write_labels()
-	if strategy2 and not os.path.isfile(cache_file_name % (n + 1)):
+	if args.incremental and not os.path.isfile(cache_file_name % (n + 1)):
 		cache_input(labels[n], n)
 
-def create_output():
+def update_labels():
 	pool = multiprocessing.pool.Pool(os.cpu_count())
 	res = [pool.apply_async(check_label, (i,)) for i in range(len(labels))]
 	pool.close()
 	pool.join()
 	assert all(r.get() is None for r in res)
 
-def write_output():
-	if strategy1:
-		for l in labels:
-			if l.input_file_name not in videos:
-				read_video(l.input_file_name)
-		subprocess.run([
-		    "ffmpeg"] +
-		    list(itertools.chain.from_iterable([
-		        "-ss", str(l.input_start_pos),
-		        "-t", str(l.input_end_pos - l.input_start_pos +
-		            strategy1_offset),
-		        "-i", videos[l.input_file_name].url
-		        ] for l in labels
-                    )) + [
-		    "-filter_complex", "concat=n=%d" % len(labels),
-		    "-an",
-		    "-y", tmp_video_file_name
-		    ],
-		    check = True
-		)
-	elif strategy2:
-		process = subprocess.Popen([
-		    "ffmpeg",
-		    "-protocol_whitelist", "file,pipe",
-		    "-f", "concat",
-		    "-safe", "0",
-		    "-i", "pipe:",
-		    "-c", "copy",
-		    "-an",
-		    "-y", tmp_video_file_name
-		    ],
-		    stdin = subprocess.PIPE
-		)
-		process.stdin.writelines(
-		    ("file '%s'\n" % cache_file_name % (i + 1)).encode()
-		    for i in range(len(labels))
-		)
-		process.communicate()
-		process.stdin.close()
-	if strategy1 or strategy2:
-		subprocess.run([
-		    "ffmpeg",
-		    "-i", tmp_video_file_name,
-		    "-i", audio_file_names[0],
-		    "-c", "copy",
-		    "-y", output_file_name
-		    ],
-		    check = True
-		)
+def write_video_fromscratch():
+	for l in labels:
+		if l.input_file_name not in videos:
+			read_video(l.input_file_name)
+	subprocess.run([
+	    "ffmpeg"] +
+	    list(itertools.chain.from_iterable([
+	        "-ss", str(l.input_start_pos),
+	        "-t", str(l.input_end_pos - l.input_start_pos +
+	            offset_fromscratch),
+	        "-i", videos[l.input_file_name].url
+	        ] for l in labels
+                   )) + [
+	    "-filter_complex", "concat=n=%d" % len(labels),
+	    "-an",
+	    "-y", tmp_video_file_name
+	    ],
+	    check = True
+	)
+
+def write_video_incremental():
+	process = subprocess.Popen([
+	    "ffmpeg",
+	    "-protocol_whitelist", "file,pipe",
+	    "-f", "concat",
+	    "-safe", "0",
+	    "-i", "pipe:",
+	    "-c", "copy",
+	    "-an",
+	    "-y", tmp_video_file_name
+	    ],
+	    stdin = subprocess.PIPE
+	)
+	process.stdin.writelines(
+	    ("file '%s'\n" % cache_file_name % (i + 1)).encode()
+	    for i in range(len(labels))
+	)
+	_, errors = process.communicate()
+	if process.returncode != 0:
+		raise Exception(errors)
+
+def write_video_mixed(labels_before):
+	if not os.path.isfile(args.output):
+		write_video_mixed_fromscratch()
+	else:
+		write_video_mixed_incremental(labels_before)
+
+def write_video_mixed_fromscratch():
+	process = subprocess.run([
+	    "ffmpeg"] +
+	    list(itertools.chain.from_iterable([
+	        "-i", cache_file_name % (i + 1)
+	        ] for i in range(len(labels))
+	    )) + [
+	    "-filter_complex", "concat=n=%d" % len(labels),
+	    "-an",
+	    "-y", tmp_video_file_name
+	    ],
+	    check = True
+	)
+
+def write_video_mixed_incremental(labels_before):
+	labels_delta = sorted(
+	    set(labels) - set(labels_before),
+	    key = lambda t: t[0]
+	)
+	if not labels_delta:
+		return
+	process = subprocess.Popen([
+	    "ffmpeg",
+	    "-protocol_whitelist", "file,pipe",
+	    "-f", "concat",
+	    "-safe", "0",
+	    "-i", "pipe:",
+	    "-c", "copy",
+	    "-an",
+	    "-y", tmp_video_file_name
+	    ],
+	    stdin = subprocess.PIPE,
+	    stderr = subprocess.PIPE
+	)
+	i0 = -1
+	for i in range(len(labels) + 1):
+		if i == len(labels) or labels[i] in labels_delta:
+			if i0 != -1:
+				process.stdin.write((
+				    "file '%s'\n" \
+				    "inpoint %f\n" \
+				    "outpoint %f\n" % (
+				    args.output,
+				    labels[i0].output_start_pos,
+				    labels[i - 1].output_end_pos + offset_mixed
+				    )).encode()
+				)
+				i0 = -1
+			if i < len(labels):
+				process.stdin.write((
+				    "file '%s'\n" % cache_file_name % (i + 1)
+				    ).encode()
+				)
+		else:
+			if i0 == -1:
+				i0 = i
+	_, errors = process.communicate()
+	if process.returncode != 0:
+		raise Exception(errors)
+
+def write_audio():
+	subprocess.run([
+	    "ffmpeg",
+	    "-i", tmp_video_file_name,
+	    "-i", args.audio,
+	    "-c", "copy",
+	    "-y", args.output
+	    ],
+	    check = True
+	)
+
+def write_output(labels_before):
+	if not args.fromscratch and not args.incremental:
+		args.fromscratch = True
+	if args.fromscratch and args.incremental:
+		write_video_mixed(labels_before)
+	elif args.fromscratch:
+		write_video_fromscratch()
+	elif args.incremental:
+		write_video_incremental()
+	if args.audio:
+		write_audio()
 		os.remove(tmp_video_file_name)
+	else:
+		os.replace(tmp_video_file_name, args.output)
 
 if __name__== "__main__":
 	random.seed(time.time())
 	read_labels()
-	if not labels:
-		create_labels(audio_file_names[0])
+	if not labels and args.audio:
+		create_labels(args.audio)
 		write_labels()
-	read_audios()
-	if not labels_created() or strategy1:
+	if not labels_created() or not args.incremental:
 		read_videos()
-	create_output()
+	labels_before = list(labels)
+	update_labels()
 	write_labels()
+	write_output(labels_before)
 	write_titles()
-	write_output()
