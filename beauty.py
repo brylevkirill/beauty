@@ -3,19 +3,23 @@ import collections
 import cv2
 import datetime
 import dlib
+import functools
 import itertools
 import madmom.audio.chroma
 import madmom.features.beats
 import madmom.features.chords
 import madmom.features.notes
+import math
 import multiprocessing.pool
 import os
 import random
+import scipy.optimize
 import subprocess
 import sys
 import tempfile
 import time
 import validators
+import warnings
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-f", "--fromscratch", action = "store_true")
@@ -39,13 +43,16 @@ create_labels_from_beats_tracking_dbn = True
 create_labels_from_notes = False
 create_labels_from_notes_rnn = True
 create_labels_from_notes_cnn = False
-select_videos_chrono = False
-drop_hard_cuts = False
-drop_hard_cuts_prob = 0.05
-drop_slow_pace = False
-drop_slow_pace_prob = 0.02
-drop_slow_pace_part = 0.2
-drop_face_less = False
+visual_filter_chrono = False
+visual_filter_drop_hard_cuts = False
+visual_filter_drop_hard_cuts_prob = 0.05
+visual_filter_drop_slow_pace = False
+visual_filter_drop_slow_pace_prob = 0.02
+visual_filter_drop_slow_pace_part = 0.2
+visual_filter_drop_face_less = False
+visual_effect_speedup = True
+visual_effect_speedup_tempo_multi = 2
+visual_effect_zooming = False
 offset_fromscratch = -0.0415
 offset_incremental = -0.0245
 offset_mixed = -0.045
@@ -257,6 +264,15 @@ def duration(media_file_name, stream):
 def frames_number(video_file_name):
 	return property(video_file_name, "v:0", "nb_frames")
 
+def tempo(audio_file_name):
+	proc = madmom.features.chords.DeepChromaChordRecognitionProcessor()
+	feat = madmom.audio.chroma.DeepChromaProcessor()(audio_file_name)
+	intervals = [
+	    (e - s - (e - s) % 0.01) for (s, e, _) in proc(feat)] or [
+	    duration(audio_file_name, "a:0")
+	]
+	return collections.Counter(intervals).most_common(1)[0][0]
+
 def check_media_url(url):
 	process = subprocess.run([
 	    "ffprobe",
@@ -363,8 +379,8 @@ def next_input_file_name(progress):
 	return file_name
 
 def next_input_start_pos(input_duration, output_duration, progress):
-	scope = min(1.0, len(videos) / len(labels)) if (
-	    select_videos_chrono) else 1.0
+	scope = (min(1.0, len(videos) / len(labels))
+	    if visual_filter_chrono else 1.0)
 	return (
 	    input_duration * (1 - scope) * progress +
 	    random.uniform(0, input_duration * scope - output_duration)
@@ -403,7 +419,8 @@ def check_video_hard_cuts(l: Label, v: Video):
 	    "-t", str(l.input_end_pos - l.input_start_pos),
 	    "-i", v.url,
 	    "-filter:v",
-	        "select='gt(scene,%f)',showinfo" % drop_hard_cuts_prob,
+	        "select='gt(scene,%f)',showinfo" %
+	            visual_filter_drop_hard_cuts_prob,
 	    "-f", "null",
 	    "-"
 	    ],
@@ -419,7 +436,8 @@ def check_video_slow_pace(l: Label, v: Video):
 	    "-t", str(l.input_end_pos - l.input_start_pos),
 	    "-i", v.url,
 	    "-filter:v",
-	        "select='gt(scene,%f)',showinfo" % drop_slow_pace_prob,
+	        "select='gt(scene,%f)',showinfo" %
+	            visual_filter_drop_slow_pace_prob,
 	    "-f", "null",
 	    "-"
 	    ],
@@ -427,7 +445,8 @@ def check_video_slow_pace(l: Label, v: Video):
 	    stderr = subprocess.PIPE
 	)
 	fast_frames_number = process.stderr.decode().count("pts_time:")
-	return fast_frames_number / frames_number(v.url) >= drop_slow_pace_part
+	return (fast_frames_number / frames_number(v.url)
+	    >= visual_filter_drop_slow_pace_part)
 
 def check_video_face_less(l: Label, v: Video):
 	_, frame_file_name = tempfile.mkstemp(suffix = ".png")
@@ -446,13 +465,13 @@ def check_video_face_less(l: Label, v: Video):
 	return not not dlib.get_frontal_face_detector()(frame)
 
 def check_video(l: Label, v: Video):
-	if drop_face_less:
+	if visual_filter_drop_face_less:
 		if not check_video_face_less(l, v):
 			return False
-	if drop_slow_pace:
+	if visual_filter_drop_slow_pace:
 		if not check_video_slow_pace(l, v):
 			return False
-	if drop_hard_cuts:
+	if visual_filter_drop_hard_cuts:
 		if not check_video_hard_cuts(l, v):
 			return False
 	return True
@@ -510,20 +529,66 @@ def update_labels():
 	pool.join()
 	assert all(r.get() is None for r in res)
 
+def visual_effects():
+	effects = []
+	if visual_effect_speedup:
+		effects.append(visual_effects_speedup)
+	if visual_effect_zooming:
+		effects.append(visual_effects_zooming)
+	filters = []
+	mappers = []
+	for e in effects:
+		filter, mapper = e()
+		filters.append(filter)
+		mappers.append(mapper)
+	return filters, mappers
+
+def visual_effects_speedup():
+	audio_tempo = tempo(args.audio) * visual_effect_speedup_tempo_multi
+	def f(x, p, y):
+		x0 = x * p + math.pi / 2
+		return (2 * (x0 - x0 % math.pi) / math.pi
+		    - math.cos(x0 % math.pi)) / p - y
+	warnings.filterwarnings(
+	    "ignore", "The iteration is not making good progress")
+	def fx(p, y):
+		return f(math.pi / p, p, y)
+	p = scipy.optimize.fsolve(functools.partial(fx, y = audio_tempo), 1)[0]
+	filter = "setpts='" \
+	    "(2 * (T * %.3f + PI / 2 - mod(T * %.3f + PI / 2, PI)) / PI" \
+	    "- cos(mod(T * %.3f + PI / 2, PI))) / %.3f / TB'" % tuple([p] * 4)
+	def mapper(y):
+		return scipy.optimize.fsolve(
+		    functools.partial(f, p = p, y = y), y)[0]
+	return filter, mapper
+
+def visual_effects_zooming():
+	return "", lambda x: x
+
+def apply(functions, x):
+	y = x
+	for f in functions:
+		y = f(y)
+	return y
+
 def write_video_fromscratch():
 	for l in labels:
 		if l.input_file_name not in videos:
 			read_video(l.input_file_name)
+	concat_filter = "concat=n=%d" % len(labels)
+	effects_filters, effects_mappers = visual_effects()
 	subprocess.run([
 	    "ffmpeg"] +
 	    list(itertools.chain.from_iterable([
 	        "-ss", str(l.input_start_pos),
-	        "-t", str(l.input_end_pos - l.input_start_pos +
+	        "-t", "%.3f" % max(0,
+	            apply(effects_mappers, l.output_end_pos) -
+	            apply(effects_mappers, l.output_start_pos) +
 	            offset_fromscratch),
 	        "-i", videos[l.input_file_name].url
 	        ] for l in labels
                    )) + [
-	    "-filter_complex", "concat=n=%d" % len(labels),
+	    "-filter_complex", ", ".join([concat_filter] + effects_filters),
 	    "-an",
 	    "-y", tmp_video_file_name
 	    ],
