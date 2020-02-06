@@ -21,43 +21,59 @@ import time
 import validators
 import warnings
 
-parser = argparse.ArgumentParser()
-parser.add_argument("-f", "--fromscratch", action = "store_true")
-parser.add_argument("-i", "--incremental", action = "store_true")
-parser.add_argument("-l", "--labels", metavar = "<labels file>", required = True)
-parser.add_argument("-v", "--video", metavar = "<video file|URL>", nargs = "+")
-parser.add_argument("-a", "--audio", metavar= "<audio file>")
-parser.add_argument("-o", "--output", metavar = "<output file>")
+parser = argparse.ArgumentParser(
+    formatter_class = argparse.ArgumentDefaultsHelpFormatter
+)
+def arg(*args, **kwargs):
+	kwargs["action"] = "store" if "type" in kwargs else "store_true"
+	for a in args:
+		if a.startswith("--"):
+			kwargs["dest"] = a[2:].replace("-", "_")
+	parser.add_argument(*args, **kwargs)
+
+arg("-f", "--reencode")
+arg("-i", "--increment")
+arg("-l", "--labels", metavar = "<labels file>", type = str, required = True)
+arg("-v", "--video", metavar = "<video file|URL>", type = str, nargs = "+")
+arg("-a", "--audio", metavar = "<audio file>", type = str)
+arg("-o", "--output", metavar = "<output file>", type = str, required = True)
+arg("-c", "--cache", metavar = "<cache file>", type = str, default = "%d.mp4")
+
+arg("--create-labels-minima", type = float)
+arg("--create-labels-maxima", type = float)
+arg("--create-labels-joins", type = int, default = 1)
+arg("--create-labels-splits", type = int, default = 1)
+arg("--create-labels-from-chords")
+arg("--create-labels-from-chords-chroma")
+arg("--create-labels-from-chords-cnn")
+arg("--create-labels-from-beats")
+arg("--create-labels-from-beats-detection")
+arg("--create-labels-from-beats-detection-crf")
+arg("--create-labels-from-beats-tracking")
+arg("--create-labels-from-beats-tracking-dbn")
+arg("--create-labels-from-notes")
+arg("--create-labels-from-notes-rnn")
+arg("--create-labels-from-notes-cnn")
+
+arg("--visual-filter-chrono")
+arg("--visual-filter-drop-hard-cuts")
+arg("--visual-filter-drop-hard-cuts-prob", type = float, default = 0.05)
+arg("--visual-filter-drop-slow-pace")
+arg("--visual-filter-drop-slow-pace-prob", type = float, default = 0.02)
+arg("--visual-filter-drop-slow-pace-rate", type = float, default = 0.2)
+arg("--visual-filter-drop-face-less")
+
+arg("--visual-effect-speedup")
+arg("--visual-effect-speedup-tempo-multi", type = float, default = 1)
+arg("--visual-effect-zooming")
+
+arg("--offset-reencode", type = float, default = -0.0415)
+arg("--offset-increment", type = float, default = -0.0245)
+arg("--offset-mixed", type = float, default = -0.045)
+
 args = parser.parse_args()
 
-create_labels_length_minima = 0.4
-create_labels_from_chords = True
-create_labels_from_chords_chroma = True
-create_labels_from_chords_cnn = False
-create_labels_from_beats = False
-create_labels_from_beats_join_size = 4
-create_labels_from_beats_detection = False
-create_labels_from_beats_detection_crf = False
-create_labels_from_beats_tracking = False
-create_labels_from_beats_tracking_dbn = True
-create_labels_from_notes = False
-create_labels_from_notes_rnn = True
-create_labels_from_notes_cnn = False
-visual_filter_chrono = False
-visual_filter_drop_hard_cuts = False
-visual_filter_drop_hard_cuts_prob = 0.05
-visual_filter_drop_slow_pace = False
-visual_filter_drop_slow_pace_prob = 0.02
-visual_filter_drop_slow_pace_part = 0.2
-visual_filter_drop_face_less = False
-visual_effect_speedup = True
-visual_effect_speedup_tempo_multi = 2
-visual_effect_zooming = False
-offset_fromscratch = -0.0415
-offset_incremental = -0.0245
-offset_mixed = -0.045
-cache_file_name = "%d.mp4"
-tmp_video_file_name = "tmp.mp4"
+tmp_output = "tmp." + args.output
 
 Label = collections.namedtuple("Label", """
     output_start_pos
@@ -130,22 +146,43 @@ def labels_created():
 	    for l in labels)
 
 def create_labels(audio_file_name):
+	if (not args.create_labels_from_chords and
+	   not args.create_labels_from_beats and
+	   not args.create_labels_from_notes):
+		args.create_labels_from_chords = True
 	L = sorted(set([
 	    0,
 	    *(labels_from_chords(audio_file_name)
-	        if create_labels_from_chords else []),
+	        if args.create_labels_from_chords else []),
 	    *(labels_from_beats(audio_file_name)
-	        if create_labels_from_beats else []),
+	        if args.create_labels_from_beats else []),
 	    *(labels_from_notes(audio_file_name)
-	        if create_labels_from_notes else []),
+	        if args.create_labels_from_notes else []),
 	    duration(audio_file_name, "a:0")
 	]))
-	L_last = [L[0]]
-	L[1:-1] = [
-	    L[i] for i in range(1, len(L) - 1)
-	    if L[i] - L_last[0] >= create_labels_length_minima and
-	        not L_last.remove(L_last[0]) and not L_last.append(L[i])
-	]
+	if args.create_labels_joins > 1:
+		L[:] = L[::args.create_labels_joins]
+	if args.create_labels_splits > 1:
+		L[:] = [
+		    L[i] + (L[i + 1] - L[i]) * j / args.create_labels_splits
+		    for i in range(len(L) - 1)
+		    for j in range(args.create_labels_splits)
+		]
+	if args.create_labels_maxima:
+		L[:] = [
+		    L[i] + j * args.create_labels_maxima
+		    for i in range(len(L) - 1)
+		    for j in range(1 +
+		        int((L[i + 1] - L[i]) / args.create_labels_maxima))
+		]
+	if args.create_labels_minima:
+		L_last = [L[0]]
+		L[1:-1] = [
+		    L[i]
+		    for i in range(1, len(L) - 1)
+		    if L[i] - L_last[0] >= args.create_labels_minima and
+		        not L_last.remove(L_last[0]) and not L_last.append(L[i])
+		]
 	labels[:] = [
 	    Label(
 	        output_start_pos = L[i],
@@ -158,16 +195,19 @@ def create_labels(audio_file_name):
 	]
 
 def labels_from_chords(audio_file_name):
+	if (not args.create_labels_from_chords_chroma and
+	    not args.create_labels_from_chords_cnn):
+		args.create_labels_from_chords_chroma = True
 	proc = []
 	feat = []
-	if create_labels_from_chords_chroma:
+	if args.create_labels_from_chords_chroma:
 		proc.append(
 		    madmom.features.chords.DeepChromaChordRecognitionProcessor()
 		)
 		feat.append(madmom.audio.chroma.DeepChromaProcessor()(
 		    audio_file_name
 		))
-	if create_labels_from_chords_cnn:
+	if args.create_labels_from_chords_cnn:
 		proc.append(
 		    madmom.features.chords.CRFChordRecognitionProcessor()
 		)
@@ -179,24 +219,29 @@ def labels_from_chords(audio_file_name):
 	))
 
 def labels_from_beats(audio_file_name):
+	if (not args.create_labels_from_beats_detection and
+	    not args.create_labels_from_beats_detection_crf and
+	    not args.create_labels_from_beats_tracking and
+	    not args.create_labels_from_beats_tracking_dbn):
+		args.create_labels_from_beats_tracking_dbn = True
 	proc = []
-	if create_labels_from_beats_detection:
+	if args.create_labels_from_beats_detection:
 		proc.append(madmom.features.beats.BeatDetectionProcessor(
 		    look_aside = 0.2,
 		    fps = 100
 		))
-	if create_labels_from_beats_detection_crf:
+	if args.create_labels_from_beats_detection_crf:
 		proc.append(madmom.features.beats.CRFBeatDetectionProcessor(
 		    interval_sigma = 0.18,
 		    use_factors = False,
 		    fps = 100
 		))
-	if create_labels_from_beats_tracking:
+	if args.create_labels_from_beats_tracking:
 		proc.append(madmom.features.beats.BeatTrackingProcessor(
 		    look_aside = 0.2,
 		    fps = 100
 		))
-	if create_labels_from_beats_tracking_dbn:
+	if args.create_labels_from_beats_tracking_dbn:
 		proc.append(madmom.features.beats.DBNBeatTrackingProcessor(
 		    min_bpm = 50,
 		    max_bpm = 100,
@@ -206,14 +251,17 @@ def labels_from_beats(audio_file_name):
 		    fps = 100
 		))
 	return set(itertools.chain.from_iterable(
-	    p(madmom.features.beats.RNNBeatProcessor()(
-	        audio_file_name))[::create_labels_from_beats_join_size]
-	    for p in proc))
+	    p(madmom.features.beats.RNNBeatProcessor()(audio_file_name))
+	    for p in proc
+	))
 
 def labels_from_notes(audio_file_name):
+	if (not args.create_labels_from_notes_rnn and
+	    not args.create_labels_from_notes_cnn):
+		args.create_labels_from_notes_rnn = True
 	proc = []
 	act = []
-	if create_labels_from_notes_rnn:
+	if args.create_labels_from_notes_rnn:
 		proc.append(madmom.features.notes.NoteOnsetPeakPickingProcessor(
 		    fps = 100,
 		    pitch_offset = 21
@@ -221,7 +269,7 @@ def labels_from_notes(audio_file_name):
 		act.append(madmom.features.notes.RNNPianoNoteProcessor()(
 		    audio_file_name
 		))
-	if create_labels_from_notes_cnn:
+	if args.create_labels_from_notes_cnn:
 		proc.append(madmom.features.notes.ADSRNoteTrackingProcessor())
 		act.append(madmom.features.notes.CNNPianoNoteProcessor()(
 		    audio_file_name
@@ -352,8 +400,8 @@ def youtube_playlist(url):
 	]
 
 def read_videos():
-	if not args.video:
-		raise Exception("No video file names or URLs given.")
+	if args.video is None:
+		args.video = []
 	for v in list(args.video):
 		if "youtube.com/playlist" in v or v.startswith("ytsearch"):
 			args.video.remove(v)
@@ -362,6 +410,8 @@ def read_videos():
 		if (l.input_file_name is not None and
 		    l.input_file_name not in args.video):
 			args.video.append(l.input_file_name)
+	if not args.video:
+		raise Exception("No video file names or URLs given.")
 	pool = multiprocessing.pool.ThreadPool(len(args.video))
 	res = [pool.apply_async(read_video, (v, False)) for v in args.video]
 	pool.close()
@@ -380,7 +430,7 @@ def next_input_file_name(progress):
 
 def next_input_start_pos(input_duration, output_duration, progress):
 	scope = (min(1.0, len(videos) / len(labels))
-	    if visual_filter_chrono else 1.0)
+	    if args.visual_filter_chrono else 1.0)
 	return (
 	    input_duration * (1 - scope) * progress +
 	    random.uniform(0, input_duration * scope - output_duration)
@@ -418,9 +468,8 @@ def check_video_hard_cuts(l: Label, v: Video):
 	    "-ss", str(l.input_start_pos),
 	    "-t", str(l.input_end_pos - l.input_start_pos),
 	    "-i", v.url,
-	    "-filter:v",
-	        "select='gt(scene,%f)',showinfo" %
-	            visual_filter_drop_hard_cuts_prob,
+	    "-vf", "select='gt(scene,%f)',showinfo" %
+	        args.visual_filter_drop_hard_cuts_prob,
 	    "-f", "null",
 	    "-"
 	    ],
@@ -435,9 +484,8 @@ def check_video_slow_pace(l: Label, v: Video):
 	    "-ss", str(l.input_start_pos),
 	    "-t", str(l.input_end_pos - l.input_start_pos),
 	    "-i", v.url,
-	    "-filter:v",
-	        "select='gt(scene,%f)',showinfo" %
-	            visual_filter_drop_slow_pace_prob,
+	    "-vf", "select='gt(scene,%f)',showinfo" %
+	        args.visual_filter_drop_slow_pace_prob,
 	    "-f", "null",
 	    "-"
 	    ],
@@ -446,7 +494,7 @@ def check_video_slow_pace(l: Label, v: Video):
 	)
 	fast_frames_number = process.stderr.decode().count("pts_time:")
 	return (fast_frames_number / frames_number(v.url)
-	    >= visual_filter_drop_slow_pace_part)
+	    >= args.visual_filter_drop_slow_pace_rate)
 
 def check_video_face_less(l: Label, v: Video):
 	_, frame_file_name = tempfile.mkstemp(suffix = ".png")
@@ -465,13 +513,13 @@ def check_video_face_less(l: Label, v: Video):
 	return not not dlib.get_frontal_face_detector()(frame)
 
 def check_video(l: Label, v: Video):
-	if visual_filter_drop_face_less:
+	if args.visual_filter_drop_face_less:
 		if not check_video_face_less(l, v):
 			return False
-	if visual_filter_drop_slow_pace:
+	if args.visual_filter_drop_slow_pace:
 		if not check_video_slow_pace(l, v):
 			return False
-	if visual_filter_drop_hard_cuts:
+	if args.visual_filter_drop_hard_cuts:
 		if not check_video_hard_cuts(l, v):
 			return False
 	return True
@@ -482,11 +530,12 @@ def cache_input(l: Label, n):
 	subprocess.run([
 	    "ffmpeg",
 	    "-ss", str(l.input_start_pos),
-	    "-t", str(l.input_end_pos - l.input_start_pos + offset_incremental),
+	    "-t", str(l.input_end_pos - l.input_start_pos +
+	        args.offset_increment),
 	    "-i", videos[l.input_file_name].url,
 	    "-filter_complex", "concat=n=1",
 	    "-an",
-	    "-y", cache_file_name % (n + 1)
+	    "-y", args.cache % (n + 1)
 	    ],
 	    check = True
 	)
@@ -496,18 +545,18 @@ def check_label(n):
 		label, label_changed = update_label(labels[n], n / len(labels))
 		if not label_changed:
 			break
-		if args.incremental:
+		if args.increment:
 			cache_input(label, n)
 			duration = label.output_end_pos - label.output_start_pos
 			cache_label = Label(
 			    output_start_pos = label.output_start_pos,
 			    output_end_pos = label.output_end_pos,
-			    input_file_name = cache_file_name % (n + 1),
+			    input_file_name = args.cache % (n + 1),
 			    input_start_pos = 0,
 			    input_end_pos = duration
 			)
 			cache_video = Video(
-			    url = cache_file_name % (n + 1),
+			    url = args.cache % (n + 1),
 			    duration = duration
 			)
 			if check_video(cache_label, cache_video):
@@ -519,7 +568,7 @@ def check_label(n):
 				break
 	if label_changed:
 		write_labels()
-	if args.incremental and not os.path.isfile(cache_file_name % (n + 1)):
+	if args.increment and not os.path.isfile(args.cache % (n + 1)):
 		cache_input(labels[n], n)
 
 def update_labels():
@@ -531,9 +580,9 @@ def update_labels():
 
 def visual_effects():
 	effects = []
-	if visual_effect_speedup:
+	if args.visual_effect_speedup:
 		effects.append(visual_effects_speedup)
-	if visual_effect_zooming:
+	if args.visual_effect_zooming:
 		effects.append(visual_effects_zooming)
 	filters = []
 	mappers = []
@@ -544,7 +593,7 @@ def visual_effects():
 	return filters, mappers
 
 def visual_effects_speedup():
-	audio_tempo = tempo(args.audio) * visual_effect_speedup_tempo_multi
+	audio_tempo = tempo(args.audio) * args.visual_effect_speedup_tempo_multi
 	def f(x, p, y):
 		x0 = x * p + math.pi / 2
 		return (2 * (x0 - x0 % math.pi) / math.pi
@@ -571,7 +620,7 @@ def apply(functions, x):
 		y = f(y)
 	return y
 
-def write_video_fromscratch():
+def write_video_reencode():
 	for l in labels:
 		if l.input_file_name not in videos:
 			read_video(l.input_file_name)
@@ -584,18 +633,18 @@ def write_video_fromscratch():
 	        "-t", "%.3f" % max(0,
 	            apply(effects_mappers, l.output_end_pos) -
 	            apply(effects_mappers, l.output_start_pos) +
-	            offset_fromscratch),
+	            args.offset_reencode),
 	        "-i", videos[l.input_file_name].url
 	        ] for l in labels
                    )) + [
 	    "-filter_complex", ", ".join([concat_filter] + effects_filters),
 	    "-an",
-	    "-y", tmp_video_file_name
+	    "-y", tmp_output
 	    ],
 	    check = True
 	)
 
-def write_video_incremental():
+def write_video_increment():
 	process = subprocess.Popen([
 	    "ffmpeg",
 	    "-protocol_whitelist", "file,pipe",
@@ -604,12 +653,12 @@ def write_video_incremental():
 	    "-i", "pipe:",
 	    "-c", "copy",
 	    "-an",
-	    "-y", tmp_video_file_name
+	    "-y", tmp_output
 	    ],
 	    stdin = subprocess.PIPE
 	)
 	process.stdin.writelines(
-	    ("file '%s'\n" % cache_file_name % (i + 1)).encode()
+	    ("file '%s'\n" % args.cache % (i + 1)).encode()
 	    for i in range(len(labels))
 	)
 	_, errors = process.communicate()
@@ -618,25 +667,25 @@ def write_video_incremental():
 
 def write_video_mixed(labels_before):
 	if not os.path.isfile(args.output):
-		write_video_mixed_fromscratch()
+		write_video_mixed_reencode()
 	else:
-		write_video_mixed_incremental(labels_before)
+		write_video_mixed_increment(labels_before)
 
-def write_video_mixed_fromscratch():
+def write_video_mixed_reencode():
 	process = subprocess.run([
 	    "ffmpeg"] +
 	    list(itertools.chain.from_iterable([
-	        "-i", cache_file_name % (i + 1)
+	        "-i", args.cache % (i + 1)
 	        ] for i in range(len(labels))
 	    )) + [
 	    "-filter_complex", "concat=n=%d" % len(labels),
 	    "-an",
-	    "-y", tmp_video_file_name
+	    "-y", tmp_output
 	    ],
 	    check = True
 	)
 
-def write_video_mixed_incremental(labels_before):
+def write_video_mixed_increment(labels_before):
 	labels_delta = sorted(
 	    set(labels) - set(labels_before),
 	    key = lambda t: t[0]
@@ -651,7 +700,7 @@ def write_video_mixed_incremental(labels_before):
 	    "-i", "pipe:",
 	    "-c", "copy",
 	    "-an",
-	    "-y", tmp_video_file_name
+	    "-y", tmp_output
 	    ],
 	    stdin = subprocess.PIPE,
 	    stderr = subprocess.PIPE
@@ -666,13 +715,14 @@ def write_video_mixed_incremental(labels_before):
 				    "outpoint %f\n" % (
 				    args.output,
 				    labels[i0].output_start_pos,
-				    labels[i - 1].output_end_pos + offset_mixed
+				    labels[i - 1].output_end_pos +
+				        args.offset_mixed
 				    )).encode()
 				)
 				i0 = -1
 			if i < len(labels):
 				process.stdin.write((
-				    "file '%s'\n" % cache_file_name % (i + 1)
+				    "file '%s'\n" % args.cache % (i + 1)
 				    ).encode()
 				)
 		else:
@@ -685,7 +735,7 @@ def write_video_mixed_incremental(labels_before):
 def write_audio():
 	subprocess.run([
 	    "ffmpeg",
-	    "-i", tmp_video_file_name,
+	    "-i", tmp_output,
 	    "-i", args.audio,
 	    "-c", "copy",
 	    "-y", args.output
@@ -694,19 +744,19 @@ def write_audio():
 	)
 
 def write_output(labels_before):
-	if not args.fromscratch and not args.incremental:
-		args.fromscratch = True
-	if args.fromscratch and args.incremental:
+	if not args.reencode and not args.increment:
+		args.reencode = True
+	if args.reencode and args.increment:
 		write_video_mixed(labels_before)
-	elif args.fromscratch:
-		write_video_fromscratch()
-	elif args.incremental:
-		write_video_incremental()
+	elif args.reencode:
+		write_video_reencode()
+	elif args.increment:
+		write_video_increment()
 	if args.audio:
 		write_audio()
-		os.remove(tmp_video_file_name)
+		os.remove(tmp_output)
 	else:
-		os.replace(tmp_video_file_name, args.output)
+		os.replace(tmp_output, args.output)
 
 if __name__== "__main__":
 	random.seed(time.time())
@@ -714,7 +764,7 @@ if __name__== "__main__":
 	if not labels and args.audio:
 		create_labels(args.audio)
 		write_labels()
-	if not labels_created() or not args.incremental:
+	if not labels_created() or not args.increment:
 		read_videos()
 	labels_before = list(labels)
 	update_labels()
