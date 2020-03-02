@@ -31,16 +31,19 @@ def arg(*args, **kwargs):
 			kwargs["dest"] = a[2:].replace("-", "_")
 	parser.add_argument(*args, **kwargs)
 
-arg("-f", "--reencode")
-arg("-i", "--increment")
 arg("-l", "--labels", metavar = "<labels file>", type = str, required = True)
-arg("-v", "--video", metavar = "<video file|URL>", type = str, nargs = "+")
-arg("-a", "--audio", metavar = "<audio file>", type = str)
+arg("-v", "--videos", metavar = "[<video file|URL>]+", type = str, nargs = "+")
+arg("-a", "--audios", metavar = "[<audio file|URL>]+", type = str, nargs = "+")
 arg("-o", "--output", metavar = "<output file>", type = str, required = True)
 arg("-c", "--cache", metavar = "<cache file>", type = str, default = "%d.mp4")
+arg("-n", "--new-labels")
+arg("-r", "--reencode")
+arg("-i", "--increment")
 
-arg("--create-labels-minima", type = float)
-arg("--create-labels-maxima", type = float)
+arg("--videos-max-number", type = int)
+
+arg("--create-labels-min-length", type = float)
+arg("--create-labels-max-length", type = float)
 arg("--create-labels-joins", type = int, default = 1)
 arg("--create-labels-splits", type = int, default = 1)
 arg("--create-labels-from-chords")
@@ -73,7 +76,8 @@ arg("--offset-mixed", type = float, default = -0.045)
 
 args = parser.parse_args()
 
-tmp_output = "tmp." + args.output
+tmp_video_output = "tmp.video." + args.output
+tmp_audio_output = "tmp.audio." + args.output[:-4] + ".m4a"
 
 Label = collections.namedtuple("Label", """
     output_start_pos
@@ -145,20 +149,20 @@ def labels_created():
 	    l.input_end_pos != -1
 	    for l in labels)
 
-def create_labels(audio_file_name):
+def create_labels_audio():
 	if (not args.create_labels_from_chords and
 	   not args.create_labels_from_beats and
 	   not args.create_labels_from_notes):
 		args.create_labels_from_chords = True
 	L = sorted(set([
 	    0,
-	    *(labels_from_chords(audio_file_name)
+	    *(labels_from_chords(args.audio)
 	        if args.create_labels_from_chords else []),
-	    *(labels_from_beats(audio_file_name)
+	    *(labels_from_beats(args.audio)
 	        if args.create_labels_from_beats else []),
-	    *(labels_from_notes(audio_file_name)
+	    *(labels_from_notes(args.audio)
 	        if args.create_labels_from_notes else []),
-	    duration(audio_file_name, "a:0")
+	    duration(args.audio, "a:0")
 	]))
 	if args.create_labels_joins > 1:
 		L[:] = L[::args.create_labels_joins]
@@ -168,19 +172,20 @@ def create_labels(audio_file_name):
 		    for i in range(len(L) - 1)
 		    for j in range(args.create_labels_splits)
 		]
-	if args.create_labels_maxima:
+	if args.create_labels_max_length:
 		L[:] = [
-		    L[i] + j * args.create_labels_maxima
+		    L[i] + j * args.create_labels_max_length
 		    for i in range(len(L) - 1)
 		    for j in range(1 +
-		        int((L[i + 1] - L[i]) / args.create_labels_maxima))
+		        int((L[i + 1] - L[i]) / args.create_labels_max_length))
 		]
-	if args.create_labels_minima:
+	if args.create_labels_min_length:
 		L_last = [L[0]]
 		L[1:-1] = [
 		    L[i]
 		    for i in range(1, len(L) - 1)
-		    if L[i] - L_last[0] >= args.create_labels_minima and
+		    if L[i] - L_last[0] >= args.create_labels_min_length and
+		        L[-1] - L[i] >= args.create_labels_min_length and
 		        not L_last.remove(L_last[0]) and not L_last.append(L[i])
 		]
 	labels[:] = [
@@ -193,6 +198,7 @@ def create_labels(audio_file_name):
 	    )
 	    for i in range(len(L) - 1)
 	]
+	write_labels()
 
 def labels_from_chords(audio_file_name):
 	if (not args.create_labels_from_chords_chroma and
@@ -321,6 +327,32 @@ def tempo(audio_file_name):
 	]
 	return collections.Counter(intervals).most_common(1)[0][0]
 
+def read_audio():
+	for a in list(args.audios):
+		if (validators.url(a) and
+		    "youtube.com/playlist" in a or a.startswith("ytsearch")):
+			args.audios.remove(a)
+			args.audios.extend(youtube_playlist(a))
+	setattr(args, "audio", random.sample(args.audios, 1)[0])
+	if validators.url(args.audio):
+		if not labels:
+			if os.path.isfile(tmp_audio_output):
+				os.remove(tmp_audio_output)
+			process = subprocess.run([
+			    "youtube-dl",
+			    "--extract-audio",
+			    "--audio-format", "m4a",
+			    args.audio,
+			    "-o",
+			    tmp_audio_output[:-4] + ".mp4"
+			    ],
+			    check = True
+			)
+			args.audio = tmp_audio_output
+		elif "youtube.com" in args.audio or "youtu.be" in args.audio:
+			args.audio = youtube_video(
+			    args.audio, filter = "bestaudio[ext=m4a]").url
+
 def check_media_url(url):
 	process = subprocess.run([
 	    "ffprobe",
@@ -331,13 +363,16 @@ def check_media_url(url):
 	)
 	return process.returncode == 0
 
-def youtube_video(url, strict = True):
+def youtube_video(
+    url,
+    filter = "bestvideo[ext=mp4][width=1920][height=1080]",
+    strict = True):
 	try:
 		process = subprocess.run([
 		    "youtube-dl",
 		    "--get-url",
 		    "--get-duration",
-		    "-f", "bestvideo[ext=mp4][width=1920][height=1080]",
+		    "-f", filter,
 		    "--youtube-skip-dash-manifest",
 		    url
 		    ],
@@ -368,7 +403,7 @@ def youtube_video(url, strict = True):
 def read_video(video_file_name, strict = True):
 	if (validators.url(video_file_name) and
 	    "youtube.com" in video_file_name or "youtu.be" in video_file_name):
-		video = youtube_video(video_file_name, strict)
+		video = youtube_video(video_file_name, strict = strict)
 		if video is not None:
 			videos[video_file_name] = video
 	else:
@@ -392,7 +427,7 @@ def youtube_playlist(url):
 	return [
 	    "http://youtu.be/" + id
 	    for (title, id) in zip(*[iter(output)] * 2)
-	    if (url.startswith("ytsearch") and
+	    if (not url.startswith("ytsearch") or
 	        any (word.lower() not in title.lower()
 	            for word in url[url.index(':') + 1:].split()
 		)
@@ -400,20 +435,24 @@ def youtube_playlist(url):
 	]
 
 def read_videos():
-	if args.video is None:
-		args.video = []
-	for v in list(args.video):
-		if "youtube.com/playlist" in v or v.startswith("ytsearch"):
-			args.video.remove(v)
-			args.video.extend(youtube_playlist(v))
+	if args.videos is None:
+		args.videos = []
+	for v in list(args.videos):
+		if (validators.url(v) and
+		    "youtube.com/playlist" in v or v.startswith("ytsearch")):
+			args.videos.remove(v)
+			if not labels_created():
+				args.videos.extend(youtube_playlist(v))
+	if args.videos_max_number and len(args.videos) > args.videos_max_number:
+		args.videos = random.sample(args.videos, args.videos_max_number)
 	for l in labels:
 		if (l.input_file_name is not None and
-		    l.input_file_name not in args.video):
-			args.video.append(l.input_file_name)
-	if not args.video:
+		    l.input_file_name not in args.videos):
+			args.videos.append(l.input_file_name)
+	if not args.videos:
 		raise Exception("No video file names or URLs given.")
-	pool = multiprocessing.pool.ThreadPool(len(args.video))
-	res = [pool.apply_async(read_video, (v, False)) for v in args.video]
+	pool = multiprocessing.pool.ThreadPool(len(args.videos))
+	res = [pool.apply_async(read_video, (v, False)) for v in args.videos]
 	pool.close()
 	pool.join()
 	assert all(r.get() is None for r in res)
@@ -571,7 +610,7 @@ def check_label(n):
 	if args.increment and not os.path.isfile(args.cache % (n + 1)):
 		cache_input(labels[n], n)
 
-def update_labels():
+def create_labels_video():
 	pool = multiprocessing.pool.Pool(os.cpu_count())
 	res = [pool.apply_async(check_label, (i,)) for i in range(len(labels))]
 	pool.close()
@@ -639,7 +678,7 @@ def write_video_reencode():
                    )) + [
 	    "-filter_complex", ", ".join([concat_filter] + effects_filters),
 	    "-an",
-	    "-y", tmp_output
+	    "-y", tmp_video_output
 	    ],
 	    check = True
 	)
@@ -653,7 +692,7 @@ def write_video_increment():
 	    "-i", "pipe:",
 	    "-c", "copy",
 	    "-an",
-	    "-y", tmp_output
+	    "-y", tmp_video_output
 	    ],
 	    stdin = subprocess.PIPE
 	)
@@ -680,7 +719,7 @@ def write_video_mixed_reencode():
 	    )) + [
 	    "-filter_complex", "concat=n=%d" % len(labels),
 	    "-an",
-	    "-y", tmp_output
+	    "-y", tmp_video_output
 	    ],
 	    check = True
 	)
@@ -700,7 +739,7 @@ def write_video_mixed_increment(labels_before):
 	    "-i", "pipe:",
 	    "-c", "copy",
 	    "-an",
-	    "-y", tmp_output
+	    "-y", tmp_video_output
 	    ],
 	    stdin = subprocess.PIPE,
 	    stderr = subprocess.PIPE
@@ -735,7 +774,7 @@ def write_video_mixed_increment(labels_before):
 def write_audio():
 	subprocess.run([
 	    "ffmpeg",
-	    "-i", tmp_output,
+	    "-i", tmp_video_output,
 	    "-i", args.audio,
 	    "-c", "copy",
 	    "-y", args.output
@@ -754,20 +793,22 @@ def write_output(labels_before):
 		write_video_increment()
 	if args.audio:
 		write_audio()
-		os.remove(tmp_output)
+		os.remove(tmp_video_output)
+		os.remove(tmp_audio_output)
 	else:
-		os.replace(tmp_output, args.output)
+		os.replace(tmp_video_output, args.output)
 
 if __name__== "__main__":
 	random.seed(time.time())
-	read_labels()
-	if not labels and args.audio:
-		create_labels(args.audio)
-		write_labels()
+	if not args.new_labels:
+		read_labels()
+	if args.audios:
+		read_audio()
+		if not labels:
+			create_labels_audio()
 	if not labels_created() or not args.increment:
 		read_videos()
 	labels_before = list(labels)
-	update_labels()
-	write_labels()
+	create_labels_video()
 	write_output(labels_before)
 	write_titles()
