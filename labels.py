@@ -68,7 +68,7 @@ def write_labels():
     write_titles()
 
 def write_titles():
-    open(beauty.output + '.rst', 'w').writelines(
+    open(beauty.output + '.srt', 'w').writelines(
         '%d\n%s --> %s\n%d\n\n' % (
             i + 1,
             format_timestamp(labels[i].output_start_pos),

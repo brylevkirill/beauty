@@ -3,6 +3,7 @@ import multiprocessing.pool
 import os
 import random
 import subprocess
+import sys
 import validators
 
 import labels
@@ -21,19 +22,25 @@ def read_videos():
     youtube_playlists(args.videos)
     if labels_created() and args.increment:
         return
-    if args.videos_max_number and len(args.videos) > args.videos_max_number:
-        args.videos = random.sample(args.videos, args.videos_max_number)
-    for l in labels.labels:
-        if (l.input_file_name is not None and
-            l.input_file_name not in args.videos):
-            args.videos.append(l.input_file_name)
-    if not args.videos:
-        raise Exception('No video file names or URLs given.')
-    pool = multiprocessing.pool.ThreadPool(len(args.videos))
-    res = [pool.apply_async(read_video, (v, False)) for v in args.videos]
-    pool.close()
-    pool.join()
-    assert all(r.get() is None for r in res)
+    given_videos = args.videos
+    while True:
+        if args.videos_max_number and len(args.videos) > args.videos_max_number:
+            args.videos = random.sample(args.videos, args.videos_max_number)
+        for l in labels.labels:
+            if (l.input_file_name is not None and
+                l.input_file_name not in args.videos):
+                args.videos.append(l.input_file_name)
+        if not args.videos:
+            raise Exception('No video file names or video URLs given.')
+        pool = multiprocessing.pool.ThreadPool(len(args.videos))
+        res = [pool.apply_async(read_video, (v, False)) for v in args.videos]
+        pool.close()
+        pool.join()
+        assert all(r.get() is None for r in res)
+        if all (v in videos for v in args.videos):
+            break
+        else:
+            args.videos = given_videos
 
 def read_video(video_file_name, strict=True):
     if (validators.url(video_file_name) and
@@ -165,6 +172,7 @@ def cache_input_video(l: Label, n):
         read_video(l.input_file_name)
     subprocess.run([
         'ffmpeg',
+        '-loglevel', args.loglevel,
         '-ss', str(l.input_start_pos),
         '-t', str(l.input_end_pos - l.input_start_pos +
             args.offset_increment),
@@ -194,6 +202,7 @@ def visual_filter(l: Label, v: Video):
 def visual_filter_base(l: Label, v: Video, filter_expr, filter_func):
     process = subprocess.run([
         'ffmpeg',
+        '-loglevel', args.loglevel,
         '-ss', str(l.input_start_pos),
         '-t', str(l.input_end_pos - l.input_start_pos),
         '-i', v.url,
@@ -227,6 +236,7 @@ def visual_filter_face_less(l: Label, v: Video):
     _, frame_file_name = tempfile.mkstemp(suffix='.png')
     process = subprocess.run([
         'ffmpeg',
+        '-loglevel', args.loglevel,
         '-ss', str((l.input_start_pos + l.input_end_pos) / 2),
         '-i', v.url,
         '-frames:v', str(1),

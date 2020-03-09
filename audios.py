@@ -18,28 +18,50 @@ def read_audios():
     youtube_playlists(args.audios)
     if not args.audios:
         return
-    audio = random.sample(args.audios, 1)[0]
-    if not validators.url(audio):
-        args.audio_output = audio
-    else:
-        if args.new_labels:
-            if os.path.isfile(args.audio_output):
-                os.remove(args.audio_output)
-            process = subprocess.run([
-                'youtube-dl',
-                '--quiet',
-                '--extract-audio',
-                '--audio-format', 'm4a',
-                audio,
-                '-o',
-                args.audio_output[:-4] + '.mp4'
-                ],
-                check=True
-            )
+    while True:
+        audio = random.sample(args.audios, 1)[0]
+        if not validators.url(audio):
+            args.audio_output = audio
+            break
         else:
-            if 'youtube.com' in audio or 'youtu.be' in audio:
-                args.audio_output = youtube_video(
-                    audio, filter='bestaudio[ext=m4a]').url
+            if args.new_labels:
+                if os.path.isfile(args.audio_output):
+                    os.remove(args.audio_output)
+                process = subprocess.run([
+                    'youtube-dl',
+                    '--quiet',
+                    '--extract-audio',
+                    '--audio-format', 'm4a',
+                    audio,
+                    '-o',
+                    args.audio_output[:-4] + '.mp4'
+                    ],
+                    check=False
+                )
+                if process.returncode == 0:
+                    if args.output_max_length:
+                        output = args.audio_output + '.edit.m4a'
+                        process = subprocess.run([
+                            'ffmpeg',
+                            '-loglevel', args.loglevel,
+                            '-t', str(args.output_max_length),
+                            '-i', args.audio_output,
+                            output
+                            ],
+                            check=True
+                        )
+                        os.replace(output, args.audio_output)
+                    break
+            else:
+                if 'youtube.com' in audio or 'youtu.be' in audio:
+                    video = youtube_video(
+                        audio,
+                        filter='bestaudio[ext=m4a]',
+                        strict=False
+                    )
+                    if video:
+                        args.audio_output = video.url
+                        break
 
 def property(media_file_name, stream, prop):
     process = subprocess.run([

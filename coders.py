@@ -1,6 +1,7 @@
 import itertools
 import os
 import subprocess
+import sys
 
 import labels
 import videos
@@ -8,6 +9,9 @@ from beauty import args
 from videos import read_video, visual_effects
 
 def write_video(labels_before):
+    print(labels.labels, file=sys.stderr)
+    if not labels.labels_created():
+        return
     if args.reencode and args.increment:
         write_video_mixed(labels_before)
     elif args.reencode:
@@ -35,7 +39,8 @@ def write_video_reencode():
     concat_filter = 'concat=n=%d' % len(labels.labels)
     effects_filters, effects_mappers = visual_effects()
     subprocess.run([
-        'ffmpeg'] +
+        'ffmpeg',
+        '-loglevel', args.loglevel] +
         list(itertools.chain.from_iterable([
             '-ss', str(l.input_start_pos),
             '-t', '%.3f' % max(0,
@@ -62,6 +67,7 @@ def write_video_reencode():
 def write_video_increment():
     process = subprocess.Popen([
         'ffmpeg',
+        '-loglevel', args.loglevel,
         '-protocol_whitelist', 'file,pipe',
         '-f', 'concat',
         '-safe', '0',
@@ -88,7 +94,8 @@ def write_video_mixed(labels_before):
 
 def write_video_mixed_reencode():
     process = subprocess.run([
-        'ffmpeg'] +
+        'ffmpeg',
+        '-loglevel', args.loglevel] +
         list(itertools.chain.from_iterable([
             '-i', args.cache % (i + 1)
             ] for i in range(len(labels.labels))
@@ -109,6 +116,7 @@ def write_video_mixed_increment(labels_before):
         return
     process = subprocess.Popen([
         'ffmpeg',
+        '-loglevel', args.loglevel,
         '-protocol_whitelist', 'file,pipe',
         '-f', 'concat',
         '-safe', '0',
@@ -150,6 +158,7 @@ def write_video_mixed_increment(labels_before):
 def write_video_with_audio():
     subprocess.run([
         'ffmpeg',
+        '-loglevel', args.loglevel,
         '-t', str(args.output_max_length or
             labels.labels[-1].output_end_pos),
         '-i', args.video_output,

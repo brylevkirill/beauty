@@ -1,3 +1,4 @@
+import random
 import subprocess
 import validators
 
@@ -6,27 +7,26 @@ from labels import parse_timestamp
 def youtube_collections(items, type):
     def process(items, collections):
         if not items:
-            items.add(collections.values()[
-                random.randint(0, len(collections) - 1)])
+            items.extend(random.sample(collections.keys(), 1))
+            youtube_collections(items, type)
         else:
             for item in list(items):
                 if item in collections:
-                    items.append(collections[item])
+                    playlist_id = random.sample(collections[item], 1)[0]
+                    items.append(playlist_url(playlist_id))
                     items.remove(item)
+    def playlist_url(playlist_id):
+        return 'https://youtube.com/playlist?list=%s' % playlist_id
     if type == 'audio':
         audios = {
-            'orchestra': 'https://youtube.com/playlist?' \
-                'list=PL659KIPAkeqgZtrIadb7YXGlFJBqZp9SX'
+            'orchestra': ['PL659KIPAkeqgZtrIadb7YXGlFJBqZp9SX']
         }
         process(items, audios)
     if type == 'video':
         videos = {
-            'night sky': 'https://youtube.com/playlist?' \
-                'list=PL659KIPAkeqhsK80VGeiQ4g06mdYcJxt7',
-            'flowers': 'https://youtube.com/playlist?' \
-                'list=PL659KIPAkeqj_VlAKEuFRpHvCkl-03Fw1',
-            'girls': 'https://youtube.com/playlist?' \
-                'list=PL659KIPAkeqjaerr91OSBWPHRFbkY5jaD'
+            'night sky': ['PL659KIPAkeqhsK80VGeiQ4g06mdYcJxt7'],
+            'flowers': ['PL659KIPAkeqj_VlAKEuFRpHvCkl-03Fw1'],
+            'girls': ['PL659KIPAkeqjaerr91OSBWPHRFbkY5jaD']
         }
         process(items, videos)
 
@@ -44,6 +44,7 @@ def youtube_playlists(items):
 def youtube_playlist(url):
     process = subprocess.run([
         'youtube-dl',
+        '--quiet',
         '--get-title',
         '--get-id',
         '--flat-playlist',
@@ -70,6 +71,7 @@ def youtube_video(
     try:
         process = subprocess.run([
             'youtube-dl',
+            '--quiet',
             '--get-url',
             '--get-duration',
             '-f', filter,
