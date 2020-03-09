@@ -24,6 +24,7 @@ arg('-v', '--videos', type=str, nargs='+', default=[],
 arg('-o', '--output', type=str, metavar='<file> | "-" (stdout)')
 arg('-p', '--play')
 arg('-q', '--loop')
+arg('-t', '--time', type=float, default=180)
 
 arg('-m', '--videos-max-number', type=int)
 arg('-d', '--output-max-length', type=float)
@@ -70,35 +71,15 @@ arg('--offset-mixed', type=float, default=-0.045)
 
 args = parser.parse_args()
 
-if args.play:
-    sys.argv.remove('--play')
-    if args.loop:
-        sys.argv.remove('--loop')
-    tasks = 32
-    queue = os.cpu_count() / 2
-    delay = args.output_max_length if args.output_max_length else 10
-    command = (
-        'bash -c "mpv --fs --cache-secs=%f ' % delay + ' '.join(
-            '<(sleep %d; sem -j %d --fg timeout %f %s)' % (
-                i * 2,
-                queue,
-                delay * tasks,
-                'python \'%s\' --output -' % '\' \''.join(sys.argv)
-            )
-            for i in range(tasks if args.loop else 1)
-        ) + '"'
-    )
-    os.system(command)
-    sys.exit()
-
-if not args.output or args.output == '-':
-       output = 'output.' + str(uuid.uuid1()) + '.mp4'
+output = ('output.' + str(uuid.uuid1()) + '.mp4'
+    if not args.output or args.output == '-'
+    else args.output)
 if not output.endswith('.' + args.output_format):
     args.output_format = output[output.rfind('.') + 1:]
 args.video_output = args.video_output % output + '.' + args.output_format
 args.audio_output = args.audio_output % output + '.m4a'
 if not args.labels:
-    args.labels = output + '.labels.txt'
+    args.labels = output + '.txt'
     args.new_labels = True
 if not args.reencode and not args.increment:
     args.reencode = True
@@ -112,6 +93,7 @@ if not args.reencode and not args.increment:
 # - applying visual filters
 # - applying visual effects
 # - encoding/writing videos (reencoding/incrementing)
+# - playing created videos
 
 if __name__== '__main__':
     import multiprocessing
@@ -124,6 +106,8 @@ if __name__== '__main__':
     import coders
 
     with multiprocessing.Manager() as manager:
+        if args.play:
+            coders.play()
         labels.labels = manager.list()
         videos.videos = manager.dict()
         random.seed(int.from_bytes(os.getrandom(4), 'big'))

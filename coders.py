@@ -1,5 +1,6 @@
 import itertools
 import os
+import signal
 import subprocess
 import sys
 
@@ -170,3 +171,34 @@ def write_video_with_audio():
         ],
         check=True
     )
+
+def play():
+    sys.argv.remove('--play')
+    if args.loop:
+        sys.argv.remove('--loop')
+    delay = args.output_max_length if args.output_max_length else 10
+    tasks = int(args.time / delay)
+    queue = os.cpu_count() // 2
+    chunk = '%d.mp4'
+    for i in range(tasks):
+        if os.path.isfile(chunk % i):
+            os.remove(chunk % i)
+    command = (
+        'bash -c "timeout --foreground %f mpv --fs ' % args.time + ' '.join(
+            '<(sleep %d; ' \
+            'timeout --foreground %f sem -j %d --fg %s; ' \
+            'cat %d.mp4)' % (
+                i * delay,
+                (queue - 1) * delay,
+                queue,
+                'python \'%s\' --output %s' % (
+                    '\' \''.join(sys.argv),
+                    chunk % i
+                ),
+                i
+            )
+            for i in range(tasks if args.loop else 1)
+        ) + '"'
+    )
+    os.system(command)
+    os.kill(os.getpid(), signal.SIGTERM)

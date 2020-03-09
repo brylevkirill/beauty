@@ -3,7 +3,6 @@ import multiprocessing.pool
 import os
 import random
 import subprocess
-import sys
 import validators
 
 import labels
