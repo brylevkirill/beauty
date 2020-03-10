@@ -62,6 +62,7 @@ arg('--visual-effect-speedup-tempo-multi', type=float, default=1)
 arg('--visual-effect-zooming')
 
 arg('--loglevel', default='repeat+level+warning')
+arg('--subtitles')
 arg('--video-output', type=str, default='%s.video')
 arg('--audio-output', type=str, default='%s.audio')
 arg('--cache', metavar='<cache file>', type=str, default='%d.mp4')

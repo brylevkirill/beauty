@@ -176,29 +176,38 @@ def play():
     sys.argv.remove('--play')
     if args.loop:
         sys.argv.remove('--loop')
-    delay = args.output_max_length if args.output_max_length else 10
+    delay = args.output_max_length if args.output_max_length else 60
     tasks = int(args.time / delay)
     queue = os.cpu_count() // 2
-    chunk = '%d.mp4'
+    video = '%d.mp4'
     for i in range(tasks):
-        if os.path.isfile(chunk % i):
-            os.remove(chunk % i)
+        if os.path.isfile(video % i):
+            os.remove(video % i)
     command = (
-        'bash -c "timeout --foreground %f mpv --fs ' % args.time + ' '.join(
-            '<(sleep %d; ' \
-            'timeout --foreground %f sem -j %d --fg %s; ' \
-            'cat %d.mp4)' % (
-                i * delay,
-                (queue - 1) * delay,
-                queue,
-                'python \'%s\' --output %s' % (
-                    '\' \''.join(sys.argv),
-                    chunk % i
-                ),
-                i
-            )
-            for i in range(tasks if args.loop else 1)
-        ) + '"'
+        'bash -c "' \
+            'timeout --foreground %f ' % args.time +
+                'mpv --fs ' + ' '.join(
+                    '--{ <(' \
+                        'sleep %d; ' \
+                        'timeout --foreground %f ' \
+                            'parallel --semaphore -j %d --fg %s; ' \
+                        'cat %s' \
+                    ') %s --} ' % (
+                        i * delay,
+                        (queue - 1) * delay,
+                        queue,
+                        'python \'%s\' --output %s' % (
+                            '\' \''.join(sys.argv),
+                            video % i
+                        ),
+                        video % i,
+                        '--sub-file=' +
+                            video % i + '.srt' if args.subtitles else ''
+                    )
+                    for i in range(tasks if args.loop else 1)
+                ) + '' \
+        '"'
     )
     os.system(command)
-    os.kill(os.getpid(), signal.SIGTERM)
+    os.killpg(os.getpid(), signal.SIGTERM)
+    sys.exit()

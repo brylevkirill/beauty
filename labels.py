@@ -65,7 +65,8 @@ def read_labels():
 
 def write_labels():
     open(args.labels, 'w').writelines(format_label(l) for l in labels)
-    write_titles()
+    if args.subtitles:
+        write_titles()
 
 def write_titles():
     open(beauty.output + '.srt', 'w').writelines(
