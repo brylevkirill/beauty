@@ -16,6 +16,30 @@ Video = collections.namedtuple('Video', '''
     ''')
 videos = {}
 
+def property(media_file_name, stream, prop):
+    process = subprocess.run([
+        'ffprobe',
+        '-select_streams', stream,
+        '-show_entries', 'stream=%s' % prop,
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        '-v', 'quiet',
+        media_file_name
+        ],
+        check=True,
+        stdout=subprocess.PIPE
+    )
+    return float(process.stdout.decode())
+
+def duration(video_file_name):
+    if validators.url(video_file_name):
+        if video_file_name not in videos:
+            read_video(video_file_name)
+        return videos[video_file_name].duration
+    return property(video_file_name, 'v:0', 'duration')
+
+def frames_number(video_file_name):
+    return property(video_file_name, 'v:0', 'nb_frames')
+
 def read_videos():
     youtube_collections(args.videos, 'video')
     youtube_playlists(args.videos)
@@ -56,31 +80,7 @@ def read_video(video_file_name, strict=True):
             duration=duration(video_file_name)
         )
 
-def property(media_file_name, stream, prop):
-    process = subprocess.run([
-        'ffprobe',
-        '-select_streams', stream,
-        '-show_entries', 'stream=%s' % prop,
-        '-of', 'default=noprint_wrappers=1:nokey=1',
-        '-v', 'quiet',
-        media_file_name
-        ],
-        check=True,
-        stdout=subprocess.PIPE
-    )
-    return float(process.stdout.decode())
-
-def duration(video_file_name):
-    if validators.url(video_file_name):
-        if video_file_name not in videos:
-            read_video(video_file_name)
-        return videos[video_file_name].duration
-    return property(video_file_name, 'v:0', 'duration')
-
-def frames_number(video_file_name):
-    return property(video_file_name, 'v:0', 'nb_frames')
-
-def create_labels_video():
+def update_labels():
     pool = multiprocessing.pool.Pool(os.cpu_count())
     res = [
         pool.apply_async(check_label_video, (i,))
@@ -118,7 +118,7 @@ def check_label_video(n):
                 labels.labels[n] = label
                 break
     if label_changed:
-        write_labels()
+        write_labels(args.labels)
     if args.increment and not os.path.isfile(args.cache % (n + 1)):
         cache_input_video(labels.labels[n], n)
 

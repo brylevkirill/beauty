@@ -6,11 +6,10 @@ import sys
 
 import labels
 import videos
-from beauty import args
+from beauty import args, output
 from videos import read_video, visual_effects
 
 def write_video(labels_before):
-    print(labels.labels, file=sys.stderr)
     if not labels.labels_created():
         return
     if args.reencode and args.increment:
@@ -26,7 +25,7 @@ def write_video(labels_before):
                 os.remove(args.audio_output)
             os.remove(args.video_output)
         else:
-            os.replace(args.video_output, args.output)
+            os.replace(args.video_output, output)
 
 def write_video_reencode():
     for l in labels.labels:
@@ -88,7 +87,7 @@ def write_video_increment():
         raise Exception(errors)
 
 def write_video_mixed(labels_before):
-    if not os.path.isfile(args.output):
+    if not os.path.isfile(output):
         write_video_mixed_reencode()
     else:
         write_video_mixed_increment(labels_before)
@@ -137,7 +136,7 @@ def write_video_mixed_increment(labels_before):
                     'file \'%s\'\n' \
                     'inpoint %f\n' \
                     'outpoint %f\n' % (
-                    args.output,
+                    output,
                     labels.labels[i0].output_start_pos,
                     labels.labels[i - 1].output_end_pos +
                         args.offset_mixed
@@ -167,7 +166,7 @@ def write_video_with_audio():
             labels.labels[-1].output_end_pos),
         '-i', args.audio_output,
         '-c', 'copy',
-        '-y', args.output
+        '-y', output
         ],
         check=True
     )
@@ -185,29 +184,27 @@ def play():
             os.remove(video % i)
     command = (
         'bash -c "' \
-            'timeout --foreground %f ' % args.time +
-                'mpv --fs ' + ' '.join(
-                    '--{ <(' \
-                        'sleep %d; ' \
-                        'timeout --foreground %f ' \
-                            'parallel --semaphore -j %d --fg %s; ' \
-                        'cat %s' \
-                    ') %s --} ' % (
-                        i * delay,
-                        (queue - 1) * delay,
-                        queue,
-                        'python \'%s\' --output %s' % (
-                            '\' \''.join(sys.argv),
-                            video % i
-                        ),
-                        video % i,
-                        '--sub-file=' +
-                            video % i + '.srt' if args.subtitles else ''
-                    )
-                    for i in range(tasks if args.loop else 1)
-                ) + '' \
+            'mpv --fs ' + ' '.join(
+                '--{ <(' \
+                    'sleep %d; ' \
+                    'timeout --foreground %f ' \
+                        'parallel --semaphore -j %d --fg %s; ' \
+                    'cat %s' \
+                ') %s --} ' % (
+                    max((i - 0.5) * delay, 0),
+                    queue * delay,
+                    queue,
+                    'python \'%s\' --output %s' % (
+                        '\' \''.join(sys.argv),
+                        video % i
+                    ),
+                    video % i,
+                    '--sub-file \'%s\'' % args.subtitles_output % video % i
+                        if args.subtitles else ''
+                )
+                for i in range(tasks if args.loop else 1)
+            ) + '' \
         '"'
     )
     os.system(command)
-    os.killpg(os.getpid(), signal.SIGTERM)
     sys.exit()

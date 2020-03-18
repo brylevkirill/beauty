@@ -1,7 +1,6 @@
 import argparse
 import os
 import random
-import sys
 import uuid
 
 parser = argparse.ArgumentParser(
@@ -14,14 +13,17 @@ def arg(*args, **kwargs):
             kwargs['dest'] = a[2:].replace('-', '_')
     parser.add_argument(*args, **kwargs)
 
-arg('-n', '--new-labels')
 arg('-l', '--labels', type=str, metavar='<labels file>')
+arg('-n', '--labels-reinit')
+arg('-s', '--labels-public')
+
 opt = '<file|URL> | <YT playlist URL> | "ytsearch"[""|<N>|"all"]":"<query>'
 arg('-a', '--audios', type=str, nargs='+', default=[],
-    metavar='(%s | "orchestra")' % opt)
+    metavar='(%s | "collection"|"electronic"|"with labels")' % opt)
 arg('-v', '--videos', type=str, nargs='+', default=[],
     metavar='(%s | "night sky"|"flowers"|"girls")' % opt)
 arg('-o', '--output', type=str, metavar='<file> | "-" (stdout)')
+
 arg('-p', '--play')
 arg('-q', '--loop')
 arg('-t', '--time', type=float, default=180)
@@ -62,10 +64,11 @@ arg('--visual-effect-speedup-tempo-multi', type=float, default=1)
 arg('--visual-effect-zooming')
 
 arg('--loglevel', default='repeat+level+warning')
-arg('--subtitles')
 arg('--video-output', type=str, default='%s.video')
 arg('--audio-output', type=str, default='%s.audio')
 arg('--cache', metavar='<cache file>', type=str, default='%d.mp4')
+arg('--subtitles-output', type=str, default='%s.srt')
+arg('--subtitles')
 arg('--offset-reencode', type=float, default=-0.0415)
 arg('--offset-increment', type=float, default=-0.0245)
 arg('--offset-mixed', type=float, default=-0.045)
@@ -79,9 +82,12 @@ if not output.endswith('.' + args.output_format):
     args.output_format = output[output.rfind('.') + 1:]
 args.video_output = args.video_output % output + '.' + args.output_format
 args.audio_output = args.audio_output % output + '.m4a'
+if not args.labels or not os.path.isfile(args.labels) or args.play:
+    args.labels_reinit = True
 if not args.labels:
     args.labels = output + '.txt'
-    args.new_labels = True
+if args.play or not os.path.isfile(args.labels):
+    args.labels_reinit = True
 if not args.reencode and not args.increment:
     args.reencode = True
 
@@ -105,6 +111,7 @@ if __name__== '__main__':
     import audios
     import videos
     import coders
+    import youtube
 
     with multiprocessing.Manager() as manager:
         if args.play:
@@ -112,15 +119,17 @@ if __name__== '__main__':
         labels.labels = manager.list()
         videos.videos = manager.dict()
         random.seed(int.from_bytes(os.getrandom(4), 'big'))
-        if not args.new_labels:
-            labels.read_labels()
-            if not labels.labels:
-                args.new_labels = True
-        audios.read_audios()
+        if not args.labels_reinit:
+            labels.read_labels(args.labels)
+        args.audios[:] = audios.read_audios()
         if not labels.labels:
-            labels.labels.extend(audios.create_labels_audio())
-            labels.write_labels()
+            if args.labels_public:
+                new_labels = youtube.read_labels(args.audios[0])
+            else:
+                new_labels = audios.create_labels()
+            labels.update_labels(new_labels)
+            labels.write_labels(args.labels)
         videos.read_videos()
         labels_before = list(labels.labels)
-        videos.create_labels_video()
+        videos.update_labels()
         coders.write_video(labels_before)

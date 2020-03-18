@@ -1,8 +1,9 @@
 import collections
 import datetime
+import os
+import validators
 
-import beauty
-from beauty import args
+from beauty import args, output
 
 Label = collections.namedtuple('Label', '''
     output_start_pos
@@ -13,27 +14,44 @@ Label = collections.namedtuple('Label', '''
     ''')
 labels = []
 
-def parse_timestamp(s):
-    try:
-        return float(s)
-    except ValueError:
-        pass
-    t = s.split(':')
-    if t[1:] and int(t[0]) >= 60:
-        s = ':'.join([
-            str(int(t[0]) // 60), str(int(t[0]) % 60).zfill(2), *t[1:]
-        ])
-    try:
-        t = datetime.datetime.strptime(s, '%H:%M:%S.%f')
-    except ValueError:
-        try:
-            t = datetime.datetime.strptime(s, '%H:%M:%S')
-        except ValueError:
-            t = datetime.datetime.strptime(s, '%M:%S')
-    return t.hour * 3600 + t.minute * 60 + t.second + t.microsecond * 0.000001
+def labels_created():
+    return all (
+        l.input_file_name is not None and
+        l.input_start_pos != -1 and
+        l.input_end_pos != -1
+        for l in labels)
 
-def format_timestamp(t):
-    return datetime.datetime.utcfromtimestamp(t).strftime('%H:%M:%S.%f')[:-3]
+def update_labels(new_labels):
+    if not args.output_max_length:
+        labels[:] = new_labels
+    else:
+        labels[:] = [
+            l for l in new_labels
+            if l.output_start_pos < args.output_max_length
+            ]
+        if labels[-1].output_end_pos > args.output_max_length:
+            labels[-1] = Label(
+                output_start_pos = labels[-1].output_start_pos,
+                output_end_pos =
+                    min(labels[-1].output_end_pos, args.output_max_length),
+                input_file_name = labels[-1].input_file_name,
+                input_start_pos = labels[-1].input_start_pos,
+                input_end_pos =
+                    labels[-1].input_start_pos +
+                    min(labels[-1].output_end_pos, args.output_max_length) -
+                    labels[-1].output_start_pos
+            )
+
+def read_labels(file_name):
+    labels[:] = [
+        parse_label(s) for s in
+        open(file_name).read().splitlines()
+        ] if os.path.isfile(args.labels) else []
+
+def write_labels(file_name):
+    open(file_name, 'w').writelines(format_label(l) for l in labels)
+    if args.subtitles:
+        write_subtitles(args.subtitles_output % output)
 
 def parse_label(s):
     t = s.split('\t')
@@ -58,18 +76,24 @@ def format_label(l: Label):
             if l.input_end_pos != -1 else '') + '\n'
     )
 
-def read_labels():
-    labels[:] = [parse_label(s) for s in
-        open(args.labels).read().splitlines()
-        ] if os.path.isfile(args.labels) else []
+def read_subtitles(file_name):
+    return [
+        Label(
+            output_start_pos = parse_timestamp(t[0]),
+            output_end_pos = parse_timestamp(t[1]),
+            input_file_name = None,
+            input_start_pos = -1,
+            input_end_pos = -1
+        )
+        for t in (
+            s.split(' --> ') for s in
+            open(file_name).read().splitlines()
+        )
+        if t[1:]
+        ] if os.path.isfile(file_name) else []
 
-def write_labels():
-    open(args.labels, 'w').writelines(format_label(l) for l in labels)
-    if args.subtitles:
-        write_titles()
-
-def write_titles():
-    open(beauty.output + '.srt', 'w').writelines(
+def write_subtitles(file_name):
+    open(file_name, 'w').writelines(
         '%d\n%s --> %s\n%d\n\n' % (
             i + 1,
             format_timestamp(labels[i].output_start_pos),
@@ -78,9 +102,24 @@ def write_titles():
         for i in range(len(labels))
     )
 
-def labels_created():
-    return all (
-        l.input_file_name is not None and
-        l.input_start_pos != -1 and
-        l.input_end_pos != -1
-        for l in labels)
+def parse_timestamp(s):
+    try:
+        return float(s)
+    except ValueError:
+        pass
+    t = s.split(':')
+    if t[1:] and int(t[0]) >= 60:
+        s = ':'.join([
+            str(int(t[0]) // 60), str(int(t[0]) % 60).zfill(2), *t[1:]
+        ])
+    try:
+        t = datetime.datetime.strptime(s, '%H:%M:%S.%f')
+    except ValueError:
+        try:
+            t = datetime.datetime.strptime(s, '%H:%M:%S')
+        except ValueError:
+            t = datetime.datetime.strptime(s, '%M:%S')
+    return t.hour * 3600 + t.minute * 60 + t.second + t.microsecond * 0.000001
+
+def format_timestamp(t):
+    return datetime.datetime.utcfromtimestamp(t).strftime('%H:%M:%S.%f')[:-3]

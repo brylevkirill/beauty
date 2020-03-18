@@ -11,57 +11,7 @@ import validators
 
 from beauty import args
 from labels import Label
-from youtube import youtube_collections, youtube_playlists
-
-def read_audios():
-    youtube_collections(args.audios, 'audio')
-    youtube_playlists(args.audios)
-    if not args.audios:
-        return
-    while True:
-        audio = random.sample(args.audios, 1)[0]
-        if not validators.url(audio):
-            args.audio_output = audio
-            break
-        else:
-            if args.new_labels:
-                if os.path.isfile(args.audio_output):
-                    os.remove(args.audio_output)
-                process = subprocess.run([
-                    'youtube-dl',
-                    '--quiet',
-                    '--extract-audio',
-                    '--audio-format', 'm4a',
-                    audio,
-                    '-o',
-                    args.audio_output[:-4] + '.mp4'
-                    ],
-                    check=False
-                )
-                if process.returncode == 0:
-                    if args.output_max_length:
-                        output = args.audio_output + '.edit.m4a'
-                        process = subprocess.run([
-                            'ffmpeg',
-                            '-loglevel', args.loglevel,
-                            '-t', str(args.output_max_length),
-                            '-i', args.audio_output,
-                            output
-                            ],
-                            check=True
-                        )
-                        os.replace(output, args.audio_output)
-                    break
-            else:
-                if 'youtube.com' in audio or 'youtu.be' in audio:
-                    video = youtube_video(
-                        audio,
-                        filter='bestaudio[ext=m4a]',
-                        strict=False
-                    )
-                    if video:
-                        args.audio_output = video.url
-                        break
+from youtube import youtube_collections, youtube_playlists, youtube_video
 
 def property(media_file_name, stream, prop):
     process = subprocess.run([
@@ -89,9 +39,67 @@ def tempo(audio_file_name):
     ]
     return collections.Counter(intervals).most_common(1)[0][0]
 
-def create_labels_audio():
+def read_audios():
+    youtube_collections(args.audios, 'audio')
+    youtube_playlists(args.audios)
     if not args.audios:
-        raise Exception('No audio file names or URLs given.')
+        return
+    while True:
+        audio = random.sample(args.audios, 1)[0]
+        if not validators.url(audio):
+            args.audio_output = audio
+            break
+        else:
+            if args.labels_reinit:
+                if read_audio(audio):
+                    break
+            else:
+                if 'youtube.com' in audio or 'youtu.be' in audio:
+                    video = youtube_video(
+                        audio,
+                        filter='bestaudio[ext=m4a]',
+                        strict=False
+                    )
+                    if video:
+                        args.audio_output = video[0]
+                        break
+    return [audio]
+
+def read_audio(audio):
+    if os.path.isfile(args.audio_output):
+        os.remove(args.audio_output)
+    try:
+        process = subprocess.run([
+            'youtube-dl',
+            '--quiet',
+            '--extract-audio',
+            '--audio-format', 'm4a',
+            audio,
+            '-o',
+            args.audio_output[:-4] + '.mp4'
+            ],
+            check=True
+        )
+    except subprocess.CalledProcessError as e:
+        if e.stderr.decode() == 'This video is unavailable':
+            return False
+        else:
+            raise e
+    if args.output_max_length:
+        output = args.audio_output + '.edit.m4a'
+        process = subprocess.run([
+            'ffmpeg',
+            '-loglevel', args.loglevel,
+            '-t', str(args.output_max_length),
+            '-i', args.audio_output,
+            output
+            ],
+            check=True
+        )
+        os.replace(output, args.audio_output)
+    return True
+
+def create_labels():
     if (not args.create_labels_from_chords and
        not args.create_labels_from_beats and
        not args.create_labels_from_notes):
