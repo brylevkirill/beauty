@@ -80,6 +80,9 @@ def youtube_playlist(url):
         )
     ]
 
+def youtube_playlist_url(id):
+    return 'https://youtube.com/playlist?list=%s' % id
+
 def youtube_video(
     url,
     filter='bestvideo[ext=mp4][width=1920][height=1080]',
@@ -102,7 +105,8 @@ def youtube_video(
         if not strict:
             if any (m in e.stderr.decode() for m in [
                 'This video is unavailable',
-                'requested format not available'
+                'requested format not available',
+                'YouTube said:'
             ]):
                 return None
         raise e
@@ -110,13 +114,13 @@ def youtube_video(
     variants = [
         (url, parse_timestamp(duration))
         for (url, duration) in zip(*[iter(output)] * 2)
-        if check_media_url(url)
+        if youtube_check_video(url)
     ]
     if strict and not variants:
         raise Exception('Can\'t read "%s".' % url)
     return variants[0] if variants else None
 
-def check_media_url(url):
+def youtube_check_video(url):
     process = subprocess.run([
         'ffprobe',
         '-v', 'quiet',
@@ -126,9 +130,12 @@ def check_media_url(url):
     )
     return process.returncode == 0
 
+def youtube_video_url(id):
+    return 'https://youtu.be/%s' % id
+
 def youtube_video_id(url):
     if not validators.url(url):
-           raise Exception('YouTube video URL "%s" is not valid.' % url)
+           raise Exception('Video URL "%s" is not valid.' % url)
     o = urllib.parse.urlparse(url)
     if o.netloc == 'youtu.be':
         return o.path[1:]
@@ -141,12 +148,6 @@ def youtube_video_id(url):
         elif o.path[:3] == '/v/':
             return o.path.split('/')[2]
     return None
-
-def youtube_video_url(id):
-    return 'https://youtu.be/%s' % id
-
-def youtube_playlist_url(id):
-    return 'https://youtube.com/playlist?list=%s' % id
 
 def read_labels(url):
     video_id = youtube_video_id(url)
@@ -165,7 +166,7 @@ def read_labels(url):
     )
     errors = process.stderr.decode().splitlines()
     if 'WARNING: video doesn\'t have subtitles' in errors:
-        raise Exception('Media "%s" doesn\'t have subtitles.' % url)
+        raise Exception('Video "%s" doesn\'t have subtitles.' % url)
     subtitles = "%s.en.vtt" % video_id
     labels = read_subtitles(subtitles)
     os.remove(subtitles)

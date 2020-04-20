@@ -1,17 +1,18 @@
 import collections
 import datetime
 import os
+import typing
 import validators
 
 from beauty import args, output
 
-Label = collections.namedtuple('Label', '''
-    output_start_pos
-    output_end_pos
-    input_file_name
-    input_start_pos
-    input_end_pos
-    ''')
+class Label(typing.NamedTuple):
+    output_start_pos: float = -1
+    output_end_pos: float = -1
+    input_file_name: str = None
+    input_start_pos: float = -1
+    input_end_pos: float = -1
+
 labels = []
 
 def labels_created():
@@ -80,10 +81,7 @@ def read_subtitles(file_name):
     return [
         Label(
             output_start_pos = parse_timestamp(t[0]),
-            output_end_pos = parse_timestamp(t[1]),
-            input_file_name = None,
-            input_start_pos = -1,
-            input_end_pos = -1
+            output_end_pos = parse_timestamp(t[1])
         )
         for t in (
             s.split(' --> ') for s in

@@ -171,7 +171,7 @@ def write_video_with_audio():
         check=True
     )
 
-def play():
+def play_video():
     sys.argv.remove('--play')
     if args.loop:
         sys.argv.remove('--loop')
@@ -199,7 +199,8 @@ def play():
                         video % i
                     ),
                     video % i,
-                    '--sub-file \'%s\'' % args.subtitles_output % video % i
+                    '--sub-file \'%s\'' %
+                        args.subtitles_output % video % i
                         if args.subtitles else ''
                 )
                 for i in range(tasks if args.loop else 1)
@@ -207,4 +208,3 @@ def play():
         '"'
     )
     os.system(command)
-    sys.exit()

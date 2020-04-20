@@ -1,7 +1,19 @@
 import argparse
 import os
 import random
+import sys
 import uuid
+
+# implemented functionality:
+# - reading audios & videos
+# - YT videos/lists/search
+# - reading/writing labels
+# - creating labels (audio)
+# - creating labels (video)
+# - applying visual filters
+# - applying visual effects
+# - encoding/writing videos (reencoding/incrementing)
+# - playing created videos
 
 parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -91,21 +103,9 @@ if args.play or not os.path.isfile(args.labels):
 if not args.reencode and not args.increment:
     args.reencode = True
 
-# implemented functionality:
-# - reading audios & videos
-# - YT videos/lists/search
-# - reading/writing labels
-# - creating labels (audio)
-# - creating labels (video)
-# - applying visual filters
-# - applying visual effects
-# - encoding/writing videos (reencoding/incrementing)
-# - playing created videos
-
 if __name__== '__main__':
     import multiprocessing
     import random
-    import time
 
     import labels
     import audios
@@ -113,9 +113,11 @@ if __name__== '__main__':
     import coders
     import youtube
 
+    if args.play:
+        coders.play_video()
+        sys.exit()
+
     with multiprocessing.Manager() as manager:
-        if args.play:
-            coders.play()
         labels.labels = manager.list()
         videos.videos = manager.dict()
         random.seed(int.from_bytes(os.getrandom(4), 'big'))

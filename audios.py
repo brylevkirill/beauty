@@ -78,10 +78,14 @@ def read_audio(audio):
             '-o',
             args.audio_output[:-4] + '.mp4'
             ],
-            check=True
+            check=True,
+            stderr=subprocess.PIPE
         )
     except subprocess.CalledProcessError as e:
-        if e.stderr.decode() == 'This video is unavailable':
+        if any (m in e.stderr.decode() for m in [
+            'This video is unavailable',
+            'YouTube said:'
+        ]):
             return False
         else:
             raise e
@@ -144,10 +148,7 @@ def create_labels():
     return [
         Label(
             output_start_pos=L[i],
-            output_end_pos=L[i + 1],
-            input_file_name=None,
-            input_start_pos=-1,
-            input_end_pos=-1
+            output_end_pos=L[i + 1]
         )
         for i in range(len(L) - 1)
     ]

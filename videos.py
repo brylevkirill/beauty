@@ -1,19 +1,25 @@
 import collections
+import functools
+import math
 import multiprocessing.pool
 import os
 import random
+import scipy.optimize
 import subprocess
+import typing
 import validators
+import warnings
 
 import labels
+from audios import tempo
 from beauty import args
 from labels import labels_created, write_labels, Label
 from youtube import youtube_collections, youtube_playlists, youtube_video
 
-Video = collections.namedtuple('Video', '''
-    url
-    duration
-    ''')
+class Video(typing.NamedTuple):
+    url: str
+    duration: float
+
 videos = {}
 
 def property(media_file_name, stream, prop):
@@ -83,21 +89,21 @@ def read_video(video_file_name, strict=True):
 def update_labels():
     pool = multiprocessing.pool.Pool(os.cpu_count())
     res = [
-        pool.apply_async(check_label_video, (i,))
+        pool.apply_async(check_label, (i,))
         for i in range(len(labels.labels))
     ]
     pool.close()
     pool.join()
     assert all(r.get() is None for r in res)
 
-def check_label_video(n):
+def check_label(n):
     while True:
-        label, label_changed = update_label_video(
+        label, label_changed = update_label(
             labels.labels[n], n / len(labels.labels))
         if not label_changed:
             break
         if args.increment:
-            cache_input_video(label, n)
+            cache_input(label, n)
             duration = label.output_end_pos - label.output_start_pos
             cache_label = Label(
                 output_start_pos=label.output_start_pos,
@@ -120,15 +126,15 @@ def check_label_video(n):
     if label_changed:
         write_labels(args.labels)
     if args.increment and not os.path.isfile(args.cache % (n + 1)):
-        cache_input_video(labels.labels[n], n)
+        cache_input(labels.labels[n], n)
 
-def update_label_video(l: Label, progress):
+def update_label(l: Label, progress):
     input_file_name = l.input_file_name if (
         l.input_file_name is not None) else (
-        next_input_video_file_name(progress))
+        next_input_file_name(progress))
     input_start_pos = l.input_start_pos if (
         input_file_name is None or l.input_start_pos >= 0) else (
-        next_input_video_start_pos(
+        next_input_start_pos(
             duration(input_file_name),
             l.output_end_pos - l.output_start_pos,
             progress))
@@ -148,7 +154,7 @@ def update_label_video(l: Label, progress):
         input_end_pos
         ), label_changed
 
-def next_input_video_file_name(progress):
+def next_input_file_name(progress):
     if not videos:
         return None
     pos = random.uniform(0, sum([v.duration for _, v in videos.items()]))
@@ -158,7 +164,7 @@ def next_input_video_file_name(progress):
             break
     return file_name
 
-def next_input_video_start_pos(input_duration, output_duration, progress):
+def next_input_start_pos(input_duration, output_duration, progress):
     scope = (min(1.0, len(videos) / len(labels.labels))
         if args.visual_filter_chrono else 1.0)
     return (
@@ -166,7 +172,7 @@ def next_input_video_start_pos(input_duration, output_duration, progress):
         random.uniform(0, input_duration * scope - output_duration)
     )
 
-def cache_input_video(l: Label, n):
+def cache_input(l: Label, n):
     if l.input_file_name not in videos:
         read_video(l.input_file_name)
     subprocess.run([
@@ -251,7 +257,7 @@ def visual_filter_face_less(l: Label, v: Video):
 def visual_effects():
     effects = []
     if args.visual_effect_speedup:
-        effects.append(visual_effects_speedup)
+        effects.append(visual_effects_speedup_cosine)
     if args.visual_effect_zooming:
         effects.append(visual_effects_zooming)
     filters = []
@@ -262,7 +268,7 @@ def visual_effects():
         mappers.append(mapper)
     return filters, mappers
 
-def visual_effects_speedup():
+def visual_effects_speedup_cosine():
     audio_tempo = (tempo(args.audio_output) *
         args.visual_effect_speedup_tempo_multi)
     def f(x, p, y):
@@ -279,6 +285,35 @@ def visual_effects_speedup():
         '- cos(mod(T * %.3f + PI / 2, PI))) / %.3f / TB\'' % tuple([p] * 4)
     def mapper(y):
         return scipy.optimize.fsolve(functools.partial(f, p=p, y=y), y)[0]
+    return filter, mapper
+
+def visual_effects_speedup_custom():
+    mapping = [(
+        labels.labels[i].output_start_pos,
+        labels.labels[i].output_end_pos,
+        (i % 2) * 3 + 1
+        ) for i in range(len(labels.labels))
+    ]
+    reverse_mapping = []
+    filter = '%s'
+    time = 0
+    for (start, end, speed) in mapping:
+        delta = (end - start) / speed
+        filter = filter % ('if(lt(T,%f),%f+(T-%f)/%f,%%s)' % (
+            time + delta,
+            start,
+            time,
+            speed))
+        reverse_mapping.append((time, time + delta, speed))
+        time += delta
+    filter = 'setpts=\'%s / TB\'' % filter % end
+    def mapper(y):
+        time = 0
+        for (start, end, speed) in reverse_mapping:
+            if start <= y <= end:
+                return time + (y - start) * speed
+            time += (end - start) * speed
+        return time
     return filter, mapper
 
 def visual_effects_zooming():
