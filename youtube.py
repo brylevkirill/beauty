@@ -10,10 +10,15 @@ from labels import parse_timestamp, read_subtitles
 def youtube_collections(items, type):
     def process(items, collections):
         if not items:
-            if args.labels_public:
-                items.append('with labels')
-            else:
-                items.append('collection')
+            if type == 'audio':
+                if args.labels_public:
+                    items.append('labeled')
+                else:
+                    items.append('orchestral')
+            if type == 'video':
+                items[:] = random.sample(list(collections.values()), 1)[0]
+                if items[0][0:2] == 'PL':
+                    items[0] = youtube_playlist_url(items[0])
             youtube_collections(items, type)
         else:
             for item in list(items):
@@ -26,9 +31,9 @@ def youtube_collections(items, type):
                     items.remove(item)
     if type == 'audio':
         audios = {
-            'collection': ['PL659KIPAkeqgZtrIadb7YXGlFJBqZp9SX'],
+            'orchestral': ['PL659KIPAkeqgZtrIadb7YXGlFJBqZp9SX'],
             'electronic': ['PL659KIPAkeqgZhtIQKazFHTUaL5gXNLqD'],
-            'with labels': [
+            'labeled': [
                 'uLbmXLJm6Kk',
                 'javS-iqjMcY',
                 'PxogNHnvP_k',
@@ -40,9 +45,10 @@ def youtube_collections(items, type):
         process(items, audios)
     if type == 'video':
         videos = {
-            'night sky': ['PL659KIPAkeqhsK80VGeiQ4g06mdYcJxt7'],
+            'nightsky': ['PL659KIPAkeqhsK80VGeiQ4g06mdYcJxt7'],
             'flowers': ['PL659KIPAkeqj_VlAKEuFRpHvCkl-03Fw1'],
-            'girls': ['PL659KIPAkeqjaerr91OSBWPHRFbkY5jaD']
+            'girls': ['PL659KIPAkeqjaerr91OSBWPHRFbkY5jaD'],
+            'girls2': ['PL659KIPAkeqhUkUJdGoqQg_hxHR8Y38z8']
         }
         process(items, videos)
 

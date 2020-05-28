@@ -31,9 +31,9 @@ arg('-s', '--labels-public')
 
 opt = '<file|URL> | <YT playlist URL> | "ytsearch"[""|<N>|"all"]":"<query>'
 arg('-a', '--audios', type=str, nargs='+', default=[],
-    metavar='(%s | "collection"|"electronic"|"with labels")' % opt)
+    metavar='(%s | "orchestral"|"electronic"|"labeled")' % opt)
 arg('-v', '--videos', type=str, nargs='+', default=[],
-    metavar='(%s | "night sky"|"flowers"|"girls")' % opt)
+    metavar='(%s | "nightsky"|"flowers"|"girls"|"girls2")' % opt)
 arg('-o', '--output', type=str, metavar='<file> | "-" (stdout)')
 
 arg('-p', '--play')
@@ -94,7 +94,7 @@ if not output.endswith('.' + args.output_format):
     args.output_format = output[output.rfind('.') + 1:]
 args.video_output = args.video_output % output + '.' + args.output_format
 args.audio_output = args.audio_output % output + '.m4a'
-if not args.labels or not os.path.isfile(args.labels) or args.play:
+if args.play or not args.labels or not os.path.isfile(args.labels):
     args.labels_reinit = True
 if not args.labels:
     args.labels = output + '.txt'

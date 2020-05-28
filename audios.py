@@ -6,6 +6,7 @@ import madmom.features.chords
 import madmom.features.notes
 import os
 import random
+import shutil
 import subprocess
 import validators
 
@@ -47,7 +48,7 @@ def read_audios():
     while True:
         audio = random.sample(args.audios, 1)[0]
         if not validators.url(audio):
-            args.audio_output = audio
+            shutil.copyfile(audio, args.audio_output)
             break
         else:
             if args.labels_reinit:

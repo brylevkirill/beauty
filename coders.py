@@ -56,7 +56,7 @@ def write_video_reencode():
         '-filter_complex', ', '.join([concat_filter] + effects_filters),
         '-shortest',
         '-c:v', 'libx264',
-        '-crf', '33',
+#       '-crf', '33',
         '-f', 'matroska',
         '-y',
         args.video_output if args.output != '-' else '-'

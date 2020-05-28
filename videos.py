@@ -1,4 +1,6 @@
 import collections
+import cv2
+import dlib
 import functools
 import math
 import multiprocessing.pool
@@ -6,6 +8,7 @@ import os
 import random
 import scipy.optimize
 import subprocess
+import tempfile
 import typing
 import validators
 import warnings
