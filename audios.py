@@ -36,7 +36,7 @@ def tempo(audio_file_name):
     feat = madmom.audio.chroma.DeepChromaProcessor()(audio_file_name)
     intervals = [
         (e - s - (e - s) % 0.01) for (s, e, _) in proc(feat)] or [
-        duration(audio_file_name, 'a:0')
+        duration(audio_file_name)
     ]
     return collections.Counter(intervals).most_common(1)[0][0]
 

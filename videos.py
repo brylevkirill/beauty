@@ -100,6 +100,7 @@ def update_labels():
     assert all(r.get() is None for r in res)
 
 def check_label(n):
+    retries = 0
     while True:
         label, label_changed = update_label(
             labels.labels[n], n / len(labels.labels))
@@ -126,6 +127,10 @@ def check_label(n):
             if visual_filter(label, videos[label.input_file_name]):
                 labels.labels[n] = label
                 break
+        retries += 1
+        if retries >= args.visual_filter_retries:
+            labels.labels[n] = label
+            break
     if label_changed:
         write_labels(args.labels)
     if args.increment and not os.path.isfile(args.cache % (n + 1)):
@@ -160,12 +165,16 @@ def update_label(l: Label, progress):
 def next_input_file_name(progress):
     if not videos:
         return None
-    pos = random.uniform(0, sum([v.duration for _, v in videos.items()]))
-    for file_name, video in videos.items():
-        pos -= video.duration
-        if pos < 0:
-            break
-    return file_name
+    if args.visual_filter_chrono:
+        index = int(progress * len(labels.labels) % len(videos))
+        return list(videos.values())[index].url
+    else:
+        pos = random.uniform(0, sum(v.duration for v in videos.values()))
+        for file_name, video in videos.items():
+            pos -= video.duration
+            if pos < 0:
+                break
+        return file_name
 
 def next_input_start_pos(input_duration, output_duration, progress):
     scope = (min(1.0, len(videos) / len(labels.labels))

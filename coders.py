@@ -76,7 +76,8 @@ def write_video_increment():
         '-an',
         '-y', args.video_output
         ],
-        stdin=subprocess.PIPE
+        stdin=subprocess.PIPE,
+        stderr=subprocess.PIPE
     )
     process.stdin.writelines(
         ('file \'%s\'\n' % args.cache % (i + 1)).encode()

@@ -62,6 +62,7 @@ arg('--create-labels-from-notes')
 arg('--create-labels-from-notes-rnn')
 arg('--create-labels-from-notes-cnn')
 
+arg('--visual-filter-retries', type=int, default=3)
 arg('--visual-filter-chrono')
 arg('--visual-filter-drop-black-frame')
 arg('--visual-filter-drop-hard-cuts')
