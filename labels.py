@@ -56,8 +56,9 @@ def write_labels(file_name):
 
 def parse_label(s):
     t = s.split('\t')
-    if t[2:] and not os.path.isfile(t[2]) and not validators.url(t[2]):
-        raise ValueError('Invalid value "%s".' % t[2:])
+    if (t[2:] and not os.path.isfile(t[2]) and
+        not validators.url(t[2].replace('---', '-'))):
+        raise ValueError('Invalid value "%s".' % t[2])
     return Label(
         output_start_pos = parse_timestamp(t[0]),
         output_end_pos = parse_timestamp(t[1]),

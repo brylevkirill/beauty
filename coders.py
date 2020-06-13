@@ -56,7 +56,7 @@ def write_video_reencode():
         '-filter_complex', ', '.join([concat_filter] + effects_filters),
         '-shortest',
         '-c:v', 'libx264',
-#       '-crf', '33',
+        *(['-crf', '33'] if args.output_quality == 'low' else []),
         '-f', 'matroska',
         '-y',
         args.video_output if args.output != '-' else '-'
@@ -176,9 +176,9 @@ def play_video():
     sys.argv.remove('--play')
     if args.loop:
         sys.argv.remove('--loop')
+    sys.argv.extend(['--output-quality', 'low'])
     delay = args.output_max_length if args.output_max_length else 60
     tasks = int(args.time / delay)
-    queue = os.cpu_count() // 2
     video = '%d.mp4'
     for i in range(tasks):
         if os.path.isfile(video % i):
@@ -193,10 +193,10 @@ def play_video():
                     'cat %s' \
                 ') %s --} ' % (
                     max((i - 0.5) * delay, 0),
-                    queue * delay,
-                    queue,
-                    'python \'%s\' --output %s' % (
-                        '\' \''.join(sys.argv),
+                    args.queue * delay,
+                    args.queue,
+                    'python \\\'%s\\\' --output %s' % (
+                        '\\\' \\\''.join(sys.argv),
                         video % i
                     ),
                     video % i,

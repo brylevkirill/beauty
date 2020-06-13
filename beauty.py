@@ -26,8 +26,8 @@ def arg(*args, **kwargs):
     parser.add_argument(*args, **kwargs)
 
 arg('-l', '--labels', type=str, metavar='<labels file>')
-arg('-n', '--labels-reinit')
-arg('-s', '--labels-public')
+arg('--labels-reinit')
+arg('--labels-public')
 
 opt = '<file|URL> | <YT playlist URL> | "ytsearch"[""|<N>|"all"]":"<query>'
 arg('-a', '--audios', type=str, nargs='+', default=[],
@@ -37,14 +37,17 @@ arg('-v', '--videos', type=str, nargs='+', default=[],
 arg('-o', '--output', type=str, metavar='<file> | "-" (stdout)')
 
 arg('-p', '--play')
-arg('-q', '--loop')
+arg('-x', '--loop')
 arg('-t', '--time', type=float, default=180)
+arg('-q', '--queue', type=int, default=2)
 
-arg('-m', '--videos-max-number', type=int)
-arg('-d', '--output-max-length', type=float)
-arg('-f', '--output-format', type=str, default='mp4')
 arg('-r', '--reencode')
 arg('-i', '--increment')
+
+arg('--videos-max-number', type=int)
+arg('--output-max-length', type=float)
+arg('--output-format', type=str, default='mp4')
+arg('--output-quality', type=str, choices=['high', 'low'])
 
 arg('--create-labels-min-length', type=float, default=0.2)
 arg('--create-labels-max-length', type=float)
@@ -62,7 +65,7 @@ arg('--create-labels-from-notes')
 arg('--create-labels-from-notes-rnn')
 arg('--create-labels-from-notes-cnn')
 
-arg('--visual-filter-retries', type=int, default=3)
+arg('--visual-filter-retries', type=int, default=5)
 arg('--visual-filter-chrono')
 arg('--visual-filter-drop-black-frame')
 arg('--visual-filter-drop-hard-cuts')
