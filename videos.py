@@ -6,6 +6,7 @@ import math
 import multiprocessing.pool
 import os
 import random
+import re
 import scipy.optimize
 import subprocess
 import tempfile
@@ -60,6 +61,8 @@ def read_videos():
             args.videos = random.sample(args.videos, args.videos_max_number)
         for l in labels.labels:
             if (l.input_file_name is not None and
+                (os.path.isfile(l.input_file_name) or
+                validators.url(l.input_file_name.replace('---', '-'))) and
                 l.input_file_name not in args.videos):
                 args.videos.append(l.input_file_name)
         if not args.videos:
@@ -102,8 +105,7 @@ def update_labels():
 def check_label(n):
     retries = 0
     while True:
-        label, label_changed = update_label(
-            labels.labels[n], n / len(labels.labels))
+        label, label_changed = update_label(n)
         if not label_changed:
             break
         if args.increment:
@@ -136,16 +138,18 @@ def check_label(n):
     if args.increment and not os.path.isfile(args.cache % (n + 1)):
         cache_input(labels.labels[n], n)
 
-def update_label(l: Label, progress):
+def update_label(n):
+    l = labels.labels[n]
     input_file_name = l.input_file_name if (
-        l.input_file_name is not None) else (
-        next_input_file_name(progress))
+        l.input_file_name is not None and
+        os.path.isfile(l.input_file_name)) else (
+        next_input_file_name(n))
     input_start_pos = l.input_start_pos if (
         input_file_name is None or l.input_start_pos >= 0) else (
         next_input_start_pos(
+            n,
             duration(input_file_name),
-            l.output_end_pos - l.output_start_pos,
-            progress))
+            l.output_end_pos - l.output_start_pos))
     input_end_pos = l.input_end_pos if (
         input_file_name is None or
         l.input_start_pos >= 0 and l.input_end_pos >= 0) else (
@@ -162,25 +166,30 @@ def update_label(l: Label, progress):
         input_end_pos
         ), label_changed
 
-def next_input_file_name(progress):
+def next_input_file_name(n):
     if not videos:
         return None
     if args.visual_filter_chrono:
-        index = int(progress * len(labels.labels) % len(videos))
-        return list(videos.values())[index].url
+        return list(videos.values())[n % len(videos)].url
     else:
-        pos = random.uniform(0, sum(v.duration for v in videos.values()))
-        for file_name, video in videos.items():
-            pos -= video.duration
-            if pos < 0:
+        V = [
+            (file_name, video) for file_name, video in videos.items() if (
+                labels.labels[n].input_file_name is None or
+                re.match(labels.labels[n].input_file_name, file_name)
+            )
+        ]
+        position = random.uniform(0, sum(v.duration for _, v in V))
+        for file_name, video in V:
+            position -= video.duration
+            if position < 0:
                 break
         return file_name
 
-def next_input_start_pos(input_duration, output_duration, progress):
+def next_input_start_pos(n, input_duration, output_duration):
     scope = (min(1.0, len(videos) / len(labels.labels))
         if args.visual_filter_chrono else 1.0)
     return (
-        input_duration * (1 - scope) * progress +
+        input_duration * (1 - scope) * n / len(labels.labels) +
         random.uniform(0, input_duration * scope - output_duration)
     )
 

@@ -104,6 +104,8 @@ if not args.labels:
     args.labels = output + '.txt'
 if args.play or not os.path.isfile(args.labels):
     args.labels_reinit = True
+if not args.videos:
+    args.videos_max_number = 1
 if not args.reencode and not args.increment:
     args.reencode = True
 
