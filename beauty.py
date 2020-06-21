@@ -106,6 +106,9 @@ if args.play or not os.path.isfile(args.labels):
     args.labels_reinit = True
 if not args.videos:
     args.videos_max_number = 1
+args.visual_effect = (
+    args.visual_effect_speedup or
+    args.visual_effect_zooming)
 if not args.reencode and not args.increment:
     args.reencode = True
 

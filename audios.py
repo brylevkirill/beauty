@@ -51,7 +51,7 @@ def read_audios():
             shutil.copyfile(audio, args.audio_output)
             break
         else:
-            if args.labels_reinit:
+            if args.labels_reinit or args.visual_effect:
                 if read_audio(audio):
                     break
             else:

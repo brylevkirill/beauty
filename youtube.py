@@ -46,7 +46,12 @@ def youtube_collections(items, type):
     if type == 'video':
         videos = {
             'nightsky': ['PL659KIPAkeqhsK80VGeiQ4g06mdYcJxt7'],
-            'flowers': ['PL659KIPAkeqj_VlAKEuFRpHvCkl-03Fw1'],
+            'flowers': [
+                '4RCPqdTgf24',
+                'nvEGRN-C1oY',
+                'HJaM5JtYYGw',
+                'CV2P-xsEiYE'
+            ],
             'girls': ['PL659KIPAkeqjaerr91OSBWPHRFbkY5jaD'],
             'girls2': ['PL659KIPAkeqhUkUJdGoqQg_hxHR8Y38z8']
         }

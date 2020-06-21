@@ -60,7 +60,8 @@ def parse_label(s):
     t = s.split('\t')
     if t[2:]:
         regexp = None
-        with contextlib.suppress(re.error): regexp = re.compile(t[2])
+        with contextlib.suppress(re.error):
+            regexp = re.compile(t[2])
         if (not 'regexp' in locals() and
             not os.path.isfile(t[2]) and
             not validators.url(t[2].replace('---', '-'))):

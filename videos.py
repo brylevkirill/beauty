@@ -141,9 +141,10 @@ def check_label(n):
 def update_label(n):
     l = labels.labels[n]
     input_file_name = l.input_file_name if (
-        l.input_file_name is not None and
-        os.path.isfile(l.input_file_name)) else (
-        next_input_file_name(n))
+        l.input_file_name is not None and (
+        os.path.isfile(l.input_file_name) or
+        validators.url(l.input_file_name)
+        )) else next_input_file_name(n)
     input_start_pos = l.input_start_pos if (
         input_file_name is None or l.input_start_pos >= 0) else (
         next_input_start_pos(
@@ -170,7 +171,7 @@ def next_input_file_name(n):
     if not videos:
         return None
     if args.visual_filter_chrono:
-        return list(videos.values())[n % len(videos)].url
+        return list(videos.keys())[n % len(videos)]
     else:
         V = [
             (file_name, video) for file_name, video in videos.items() if (
