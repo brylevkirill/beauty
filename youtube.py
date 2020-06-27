@@ -28,6 +28,8 @@ def youtube_collections(items, type):
                 if item in collections:
                     if type == 'audio':
                         ids = random.sample(collections[item], 1)
+                        if item == 'labeled':
+                            args.labels_public = True
                     elif type == 'video':
                         ids = collections[item]
                     for id in ids:
@@ -42,12 +44,16 @@ def youtube_collections(items, type):
             'orchestral': ['PL659KIPAkeqgZtrIadb7YXGlFJBqZp9SX'],
             'electronic': ['PL659KIPAkeqgZhtIQKazFHTUaL5gXNLqD'],
             'labeled': [
-                'uLbmXLJm6Kk',
-                'javS-iqjMcY',
-                'PxogNHnvP_k',
-                'g85UfdZoyeg',
+                'Ax_GJvCbGRc',
+                'u0-iGVgBaYs',
+                'thlW3tjec9I',
                 'QWsQo9ZPtog',
-                'yzeclFG_ke0'
+                '4aDSKgFmJ2k',
+                'xZYkr-Bca_Y',
+                'TEr4vO_ICEg',
+                'dbGqN66jv6s',
+                'TDn_QuSF4E0',
+                'LrPFtOAJQYw'
             ]
         }
         process(items, audios)
@@ -185,7 +191,7 @@ def read_labels(url):
     )
     errors = process.stderr.decode().splitlines()
     if 'WARNING: video doesn\'t have subtitles' in errors:
-        raise Exception('Video "%s" doesn\'t have subtitles.' % url)
+        return []
     subtitles = "%s.en.vtt" % video_id
     labels = read_subtitles(subtitles)
     os.remove(subtitles)

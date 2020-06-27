@@ -199,6 +199,7 @@ def play_video():
                     'cat %s' \
                     ') ' \
                     '--sub-file=\'%s\' ' \
+                    '--stream-buffer-size=64MiB ' \
                 '--} ' % (
                     max((i - 0.5) * delay, 0),
                     args.queue * delay,

@@ -39,7 +39,7 @@ arg('-o', '--output', type=str, metavar='<file> | "-" (stdout)')
 
 arg('-p', '--play')
 arg('-x', '--loop')
-arg('-t', '--time', type=float, default=180)
+arg('-t', '--time', type=float, default=600)
 arg('-q', '--queue', type=int, default=2)
 
 arg('--reencode')
@@ -132,11 +132,11 @@ if __name__== '__main__':
         if not args.labels_reinit:
             labels.read_labels()
         if args.audios:
-            audios.read_audios()
+            args.audios[:] = audios.read_audios()
             if not labels.labels:
                 if args.labels_public:
                     new_labels = youtube.read_labels(args.audios[0])
-                else:
+                if not args.labels_public or not new_labels:
                     new_labels = audios.create_labels()
                 labels.update_labels(new_labels)
                 labels.write_labels()
