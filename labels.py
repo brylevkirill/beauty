@@ -45,14 +45,14 @@ def update_labels(new_labels):
                     labels[-1].output_start_pos
             )
 
-def read_labels(file_name):
+def read_labels():
     labels[:] = [
         parse_label(s) for s in
-        open(file_name).read().splitlines()
+        open(args.labels).read().splitlines()
         ] if os.path.isfile(args.labels) else []
 
-def write_labels(file_name):
-    open(file_name, 'w').writelines(format_label(l) for l in labels)
+def write_labels():
+    open(args.labels, 'w').writelines(format_label(l) for l in labels)
     if args.subtitles:
         write_subtitles(args.subtitles_output % output)
 

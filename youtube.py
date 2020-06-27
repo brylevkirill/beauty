@@ -22,6 +22,9 @@ def youtube_collections(items, type):
             youtube_collections(items, type)
         else:
             for item in list(items):
+                if item == 'any':
+                    items.remove(item)
+                    item = random.sample(collections.keys(), 1)[0]
                 if item in collections:
                     if type == 'audio':
                         ids = random.sample(collections[item], 1)
@@ -32,7 +35,8 @@ def youtube_collections(items, type):
                             items.append(youtube_playlist_url(id))
                         else:
                             items.append(youtube_video_url(id))
-                    items.remove(item)
+                    if item in items:
+                        items.remove(item)
     if type == 'audio':
         audios = {
             'orchestral': ['PL659KIPAkeqgZtrIadb7YXGlFJBqZp9SX'],
@@ -49,13 +53,13 @@ def youtube_collections(items, type):
         process(items, audios)
     if type == 'video':
         videos = {
-            'nightsky': ['PL659KIPAkeqhsK80VGeiQ4g06mdYcJxt7'],
             'flowers': [
                 '4RCPqdTgf24',
                 'nvEGRN-C1oY',
                 'HJaM5JtYYGw',
                 'CV2P-xsEiYE'
             ],
+            'nightsky': ['PL659KIPAkeqhsK80VGeiQ4g06mdYcJxt7'],
             'girls': ['PL659KIPAkeqjaerr91OSBWPHRFbkY5jaD'],
             'girls2': ['PL659KIPAkeqhUkUJdGoqQg_hxHR8Y38z8']
         }

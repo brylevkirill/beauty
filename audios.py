@@ -64,7 +64,7 @@ def read_audios():
                     if video:
                         args.audio_output = video[0]
                         break
-    return [audio]
+    args.audios[:] = [audio]
 
 def read_audio(audio):
     if os.path.isfile(args.audio_output):

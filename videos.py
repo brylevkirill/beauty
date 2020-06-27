@@ -55,7 +55,6 @@ def read_videos():
     youtube_playlists(args.videos)
     if labels_created() and args.increment:
         return
-    given_videos = args.videos
     while True:
         if args.videos_max_number and len(args.videos) > args.videos_max_number:
             args.videos = random.sample(args.videos, args.videos_max_number)
@@ -74,8 +73,6 @@ def read_videos():
         assert all(r.get() is None for r in res)
         if all (v in videos for v in args.videos):
             break
-        else:
-            args.videos = given_videos
 
 def read_video(video_file_name, strict=True):
     if (validators.url(video_file_name) and
@@ -134,7 +131,7 @@ def check_label(n):
             labels.labels[n] = label
             break
     if label_changed:
-        write_labels(args.labels)
+        write_labels()
     if args.increment and not os.path.isfile(args.cache % (n + 1)):
         cache_input(labels.labels[n], n)
 

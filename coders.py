@@ -176,6 +176,11 @@ def play_video():
     sys.argv.remove('--play')
     if args.loop:
         sys.argv.remove('--loop')
+    if not args.audios:
+        sys.argv.extend(['--audios', 'any'])
+    if not args.videos:
+        sys.argv.extend(['--videos', 'any'])
+        sys.argv.extend(['--videos-max-number', str(1)])
     sys.argv.extend(['--output-quality', 'low'])
     delay = args.output_max_length if args.output_max_length else 60
     tasks = int(args.time / delay)
@@ -193,7 +198,7 @@ def play_video():
                         'parallel --semaphore -j %d --fg %s; ' \
                     'cat %s' \
                     ') ' \
-                    '--sub-file \'%s\' ' \
+                    '--sub-file=\'%s\' ' \
                 '--} ' % (
                     max((i - 0.5) * delay, 0),
                     args.queue * delay,

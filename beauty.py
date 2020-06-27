@@ -31,9 +31,10 @@ arg('--labels-public')
 
 opt = '<file|URL> | <YT playlist URL> | "ytsearch"[""|<N>|"all"]":"<query>'
 arg('-a', '--audios', type=str, nargs='+', default=[],
-    metavar='(%s | "orchestral"|"electronic"|"labeled")' % opt)
+    metavar='(%s | "any"|"orchestral"|"electronic"|"labeled")' % opt)
 arg('-v', '--videos', type=str, nargs='+', default=[],
-    metavar='(%s | "nightsky"|"flowers"|"girls"|"girls2")' % opt)
+    metavar='(%s | "any"|"flowers"|"nightsky"|"girls"|"girls2")' % opt)
+arg('-i', '--images', type=str, nargs='+', default=[])
 arg('-o', '--output', type=str, metavar='<file> | "-" (stdout)')
 
 arg('-p', '--play')
@@ -41,8 +42,8 @@ arg('-x', '--loop')
 arg('-t', '--time', type=float, default=180)
 arg('-q', '--queue', type=int, default=2)
 
-arg('-r', '--reencode')
-arg('-i', '--increment')
+arg('--reencode')
+arg('--increment')
 
 arg('--videos-max-number', type=int)
 arg('--output-max-length', type=float)
@@ -98,19 +99,15 @@ if not output.endswith('.' + args.output_format):
     args.output_format = output[output.rfind('.') + 1:]
 args.video_output = args.video_output % output + '.' + args.output_format
 args.audio_output = args.audio_output % output + '.m4a'
-if args.play or not args.labels or not os.path.isfile(args.labels):
+if not args.labels or not os.path.isfile(args.labels):
     args.labels_reinit = True
 if not args.labels:
     args.labels = output + '.txt'
-if args.play or not os.path.isfile(args.labels):
-    args.labels_reinit = True
-if not args.videos:
-    args.videos_max_number = 1
+if not args.reencode and not args.increment:
+    args.reencode = True
 args.visual_effect = (
     args.visual_effect_speedup or
     args.visual_effect_zooming)
-if not args.reencode and not args.increment:
-    args.reencode = True
 
 if __name__== '__main__':
     import multiprocessing
@@ -119,6 +116,7 @@ if __name__== '__main__':
     import labels
     import audios
     import videos
+    import images
     import coders
     import youtube
 
@@ -129,19 +127,25 @@ if __name__== '__main__':
     with multiprocessing.Manager() as manager:
         labels.labels = manager.list()
         videos.videos = manager.dict()
+        images.images = manager.list()
         random.seed(int.from_bytes(os.getrandom(4), 'big'))
         if not args.labels_reinit:
-            labels.read_labels(args.labels)
-        args.audios[:] = audios.read_audios()
-        if not labels.labels:
-            if args.labels_public:
-                new_labels = youtube.read_labels(args.audios[0])
-            else:
-                new_labels = audios.create_labels()
-            labels.update_labels(new_labels)
-            labels.write_labels(args.labels)
-        videos.read_videos()
+            labels.read_labels()
+        if args.audios:
+            audios.read_audios()
+            if not labels.labels:
+                if args.labels_public:
+                    new_labels = youtube.read_labels(args.audios[0])
+                else:
+                    new_labels = audios.create_labels()
+                labels.update_labels(new_labels)
+                labels.write_labels()
         labels_before = list(labels.labels)
-        videos.update_labels()
-        labels.write_labels(args.labels)
+        if args.videos:
+            videos.read_videos()
+            videos.update_labels()
+        elif args.images:
+            images.read_images()
+            images.update_labels()
+        labels.write_labels()
         coders.write_video(labels_before)
