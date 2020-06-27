@@ -70,8 +70,8 @@ def parse_label(s):
         output_start_pos = parse_timestamp(t[0]),
         output_end_pos = parse_timestamp(t[1]),
         input_file_name = t[2] if t[2:] else None,
-        input_start_pos = parse_timestamp(t[3]) if t[3:] else -1,
-        input_end_pos = parse_timestamp(t[4]) if t[4:] else -1
+        input_start_pos = parse_timestamps(t[3]) if t[3:] else -1,
+        input_end_pos = parse_timestamps(t[4]) if t[4:] else -1
     )
 
 def format_label(l: Label):
@@ -79,9 +79,9 @@ def format_label(l: Label):
         '\t' + format_timestamp(l.output_end_pos) +
         ('\t' + l.input_file_name
             if l.input_file_name else '') +
-        ('\t' + format_timestamp(l.input_start_pos)
+        ('\t' + format_timestamps(l.input_start_pos)
             if l.input_start_pos != -1 else '') +
-        ('\t' + format_timestamp(l.input_end_pos)
+        ('\t' + format_timestamps(l.input_end_pos)
             if l.input_end_pos != -1 else '') + '\n'
     )
 
@@ -102,11 +102,15 @@ def write_subtitles(file_name):
     open(file_name, 'w').writelines(
         '%d\n%s --> %s\n%d\n\n' % (
             i + 1,
-            format_timestamp(labels[i].output_start_pos),
-            format_timestamp(labels[i].output_end_pos),
+            format_timestamps(labels[i].output_start_pos),
+            format_timestamps(labels[i].output_end_pos),
             i + 1)
         for i in range(len(labels))
     )
+
+def parse_timestamps(s):
+    ts = [parse_timestamp(t) for t in s.split(',')]
+    return ts if len(ts) > 1 else ts[0]
 
 def parse_timestamp(s):
     try:
@@ -118,14 +122,20 @@ def parse_timestamp(s):
         s = ':'.join([
             str(int(t[0]) // 60), str(int(t[0]) % 60).zfill(2), *t[1:]
         ])
+    if '.' not in s:
+        s += '.0'
     try:
         t = datetime.datetime.strptime(s, '%H:%M:%S.%f')
     except ValueError:
         try:
-            t = datetime.datetime.strptime(s, '%H:%M:%S')
+            t = datetime.datetime.strptime(s, '%H:%M:%S.%f')
         except ValueError:
-            t = datetime.datetime.strptime(s, '%M:%S')
+            t = datetime.datetime.strptime(s, '%M:%S.%f')
     return t.hour * 3600 + t.minute * 60 + t.second + t.microsecond * 0.000001
+
+def format_timestamps(t):
+    ts = t if type(t) is list else [t]
+    return ','.join(format_timestamp(x) for x in ts)
 
 def format_timestamp(t):
     return datetime.datetime.utcfromtimestamp(t).strftime('%H:%M:%S.%f')[:-3]

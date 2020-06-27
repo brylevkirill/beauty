@@ -143,4 +143,5 @@ if __name__== '__main__':
         videos.read_videos()
         labels_before = list(labels.labels)
         videos.update_labels()
+        labels.write_labels(args.labels)
         coders.write_video(labels_before)

@@ -145,16 +145,28 @@ def update_label(n):
         os.path.isfile(l.input_file_name) or
         validators.url(l.input_file_name)
         )) else next_input_file_name(n)
-    input_start_pos = l.input_start_pos if (
-        input_file_name is None or l.input_start_pos >= 0) else (
-        next_input_start_pos(
-            n,
-            duration(input_file_name),
-            l.output_end_pos - l.output_start_pos))
-    input_end_pos = l.input_end_pos if (
-        input_file_name is None or
-        l.input_start_pos >= 0 and l.input_end_pos >= 0) else (
-        input_start_pos + (l.output_end_pos - l.output_start_pos))
+    if type(l.input_start_pos) is not list:
+        input_start_pos = l.input_start_pos if (
+            input_file_name is None or l.input_start_pos >= 0) else (
+            next_input_start_pos(
+                n,
+                duration(input_file_name),
+                l.output_end_pos - l.output_start_pos))
+        input_end_pos = l.input_end_pos if (
+            input_file_name is None or
+            l.input_start_pos >= 0 and l.input_end_pos >= 0 and
+            abs((l.output_end_pos - l.output_start_pos) -
+                (l.input_end_pos - l.input_start_pos)) < 0.01) else (
+            input_start_pos + (l.output_end_pos - l.output_start_pos))
+    else:
+        index = random.randint(0, len(l.input_start_pos) - 1)
+        if type(l.input_end_pos) is not list:
+            input_start_pos = l.input_start_pos[index]
+        else:
+            input_start_pos = random.uniform(
+                l.input_start_pos[index],
+                l.input_end_pos[index] - l.output_end_pos + l.output_start_pos)
+        input_end_pos = input_start_pos + l.output_end_pos - l.output_start_pos
     label_changed = (
         input_file_name != l.input_file_name or
         input_start_pos != l.input_start_pos or

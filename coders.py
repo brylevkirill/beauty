@@ -180,6 +180,7 @@ def play_video():
     delay = args.output_max_length if args.output_max_length else 60
     tasks = int(args.time / delay)
     video = '%d.mp4'
+    subtitles = args.subtitles_output if args.subtitles else ''
     for i in range(tasks):
         if os.path.isfile(video % i):
             os.remove(video % i)
@@ -191,7 +192,9 @@ def play_video():
                     'timeout --foreground %f ' \
                         'parallel --semaphore -j %d --fg %s; ' \
                     'cat %s' \
-                ') %s --} ' % (
+                    ') ' \
+                    '--sub-file \'%s\' ' \
+                '--} ' % (
                     max((i - 0.5) * delay, 0),
                     args.queue * delay,
                     args.queue,
@@ -200,9 +203,7 @@ def play_video():
                         video % i
                     ),
                     video % i,
-                    '--sub-file \'%s\'' %
-                        args.subtitles_output % video % i
-                        if args.subtitles else ''
+                    subtitles % video % i
                 )
                 for i in range(tasks if args.loop else 1)
             ) + '' \
