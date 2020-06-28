@@ -38,9 +38,13 @@ arg('-i', '--images', type=str, nargs='+', default=[])
 arg('-o', '--output', type=str, metavar='<file> | "-" (stdout)')
 
 arg('-p', '--play')
+arg('-k', '--keep')
 arg('-x', '--loop')
 arg('-t', '--time', type=float, default=600)
 arg('-q', '--queue', type=int, default=2)
+
+arg('--input', type=str, metavar='<file>')
+arg('--input-labels', type=str, metavar='<labels file>')
 
 arg('--reencode')
 arg('--increment')

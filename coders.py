@@ -182,36 +182,47 @@ def play_video():
         sys.argv.extend(['--videos', 'any'])
         sys.argv.extend(['--videos-max-number', str(1)])
     sys.argv.extend(['--output-quality', 'low'])
+    if not args.output:
+        video = 'output.' + str(uuid.uuid1()) + '.%d.mp4'
     delay = args.output_max_length if args.output_max_length else 60
-    tasks = int(args.time / delay)
-    video = '%d.mp4'
-    subtitles = args.subtitles_output if args.subtitles else ''
-    for i in range(tasks):
-        if os.path.isfile(video % i):
-            os.remove(video % i)
+    tasks = int(args.time / delay) if args.loop else 1
     command = (
         'bash -c "' \
             'mpv --fs ' + ' '.join(
-                '--{ <(' \
+                '--{ <( ' \
                     'sleep %d; ' \
                     'timeout --foreground %f ' \
                         'parallel --semaphore -j %d --fg %s; ' \
-                    'cat %s' \
+                    'cat %s; ' \
+                    'rm -f %s ' \
                     ') ' \
-                    '--sub-file=\'%s\' ' \
                     '--stream-buffer-size=64MiB ' \
+                    '%s' \
+                    '%s' \
                 '--} ' % (
                     max((i - 0.5) * delay, 0),
                     args.queue * delay,
                     args.queue,
                     'python \\\'%s\\\' --output %s' % (
-                        '\\\' \\\''.join(sys.argv),
-                        video % i
+                        '\\\' \\\''.join(
+                            arg.replace(' ', '\\ ').
+                                replace('(', '\\(').
+                                replace(')', '\\)').
+                                replace('&', '\\&')
+                            for arg in sys.argv
+                        ),
+                        args.output if args.output else video % i
                     ),
-                    video % i,
-                    subtitles % video % i
+                    args.output if args.output else video % i,
+                    (args.output if args.output else video % i)
+                        if not args.keep else '',
+                    '--sub-file=\'%s\' ' % args.subtitles_output %
+                        (args.output if args.output else video % i)
+                        if args.subtitles else '',
+                    '--lavfi-complex=\'[vid1][vid2]hstack[vo]\' ' \
+                    '--external-file=\'%s\' ' % args.input if args.input else ''
                 )
-                for i in range(tasks if args.loop else 1)
+                for i in range(tasks)
             ) + '' \
         '"'
     )

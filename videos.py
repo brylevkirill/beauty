@@ -188,6 +188,9 @@ def next_input_file_name(n):
                 re.match(labels.labels[n].input_file_name, file_name)
             )
         ]
+        if not V:
+            raise Exception(
+                'Video not found for "%s".' % labels.labels[n].input_file_name)
         position = random.uniform(0, sum(v.duration for _, v in V))
         for file_name, video in V:
             position -= video.duration

@@ -160,7 +160,7 @@ def youtube_video_url(id):
 
 def youtube_video_id(url):
     if not validators.url(url):
-           raise Exception('Video URL "%s" is not valid.' % url)
+        raise Exception('Video URL "%s" is not valid.' % url)
     o = urllib.parse.urlparse(url)
     if o.netloc == 'youtu.be':
         return o.path[1:]
