@@ -1,6 +1,7 @@
 import argparse
 import os
 import random
+import shutil
 import sys
 import uuid
 
@@ -28,6 +29,7 @@ def arg(*args, **kwargs):
 arg('-l', '--labels', type=str, metavar='<labels file>')
 arg('--labels-reinit')
 arg('--labels-public')
+arg('--labels-source', type=str, metavar='<labels file>')
 
 opt = '<file|URL> | <YT playlist URL> | "ytsearch"[""|<N>|"all"]":"<query>'
 arg('-a', '--audios', type=str, nargs='+', default=[],
@@ -134,12 +136,16 @@ if __name__== '__main__':
         images.images = manager.list()
         random.seed(int.from_bytes(os.getrandom(4), 'big'))
         if not args.labels_reinit:
-            labels.read_labels()
+            labels.read_labels(args.labels)
+        else:
+            if args.labels_source:
+                shutil.copyfile(args.labels_source, args.labels)
+                labels.read_labels()
         if args.audios:
             args.audios[:] = audios.read_audios()
             if not labels.labels:
                 if args.labels_public:
-                    new_labels = youtube.read_labels(args.audios[0])
+                    new_labels = youtube.obtain_labels(args.audios[0])
                 if not args.labels_public or not new_labels:
                     new_labels = audios.create_labels()
                 labels.update_labels(new_labels)

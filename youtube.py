@@ -24,7 +24,10 @@ def youtube_collections(items, type):
             for item in list(items):
                 if item == 'any':
                     items.remove(item)
-                    item = random.sample(collections.keys(), 1)[0]
+                    if args.labels_public:
+                        item = 'labeled'
+                    else:
+                        item = random.sample(collections.keys(), 1)[0]
                 if item in collections:
                     if type == 'audio':
                         ids = random.sample(collections[item], 1)
@@ -174,7 +177,7 @@ def youtube_video_id(url):
             return o.path.split('/')[2]
     return None
 
-def read_labels(url):
+def obtain_labels(url):
     video_id = youtube_video_id(url)
     process = subprocess.run([
         'youtube-dl',

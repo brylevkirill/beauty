@@ -3,6 +3,7 @@ import os
 import signal
 import subprocess
 import sys
+import uuid
 
 import labels
 import videos
@@ -56,6 +57,7 @@ def write_video_reencode():
         '-filter_complex', ', '.join([concat_filter] + effects_filters),
         '-shortest',
         '-c:v', 'libx264',
+        *(['-preset', 'fast'] if args.output_quality == 'low' else []),
         *(['-crf', '33'] if args.output_quality == 'low' else []),
         '-f', 'matroska',
         '-y',
@@ -182,8 +184,7 @@ def play_video():
         sys.argv.extend(['--videos', 'any'])
         sys.argv.extend(['--videos-max-number', str(1)])
     sys.argv.extend(['--output-quality', 'low'])
-    if not args.output:
-        video = 'output.' + str(uuid.uuid1()) + '.%d.mp4'
+    video = args.output if args.output else str(uuid.uuid1()) + '.mp4'
     delay = args.output_max_length if args.output_max_length else 60
     tasks = int(args.time / delay) if args.loop else 1
     command = (
@@ -211,16 +212,17 @@ def play_video():
                                 replace('&', '\\&')
                             for arg in sys.argv
                         ),
-                        args.output if args.output else video % i
+                        video
                     ),
-                    args.output if args.output else video % i,
-                    (args.output if args.output else video % i)
-                        if not args.keep else '',
-                    '--sub-file=\'%s\' ' % args.subtitles_output %
-                        (args.output if args.output else video % i)
+                    video,
+                    video if not args.keep else '',
+                    '--sub-file=\'%s\' ' % args.subtitles_output % video
                         if args.subtitles else '',
-                    '--lavfi-complex=\'[vid1][vid2]hstack[vo]\' ' \
-                    '--external-file=\'%s\' ' % args.input if args.input else ''
+                    '--lavfi-complex=\'' \
+                        '[vid2]scale=iw/4:ih/4[v],' \
+                        '[vid1][v]overlay=W-w:H-h[vo]\' ' \
+                    '--external-file=\'%s\' ' % args.input
+                        if args.input else ''
                 )
                 for i in range(tasks)
             ) + '' \
