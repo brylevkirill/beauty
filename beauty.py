@@ -26,11 +26,6 @@ def arg(*args, **kwargs):
             kwargs['dest'] = a[2:].replace('-', '_')
     parser.add_argument(*args, **kwargs)
 
-arg('-l', '--labels', type=str, metavar='<labels file>')
-arg('--labels-reinit')
-arg('--labels-public')
-arg('--labels-source', type=str, metavar='<labels file>')
-
 opt = '<file|URL> | <YT playlist URL> | "ytsearch"[""|<N>|"all"]":"<query>'
 arg('-a', '--audios', type=str, nargs='+', default=[],
     metavar='(%s | "any"|"orchestral"|"electronic"|"labeled")' % opt)
@@ -39,11 +34,18 @@ arg('-v', '--videos', type=str, nargs='+', default=[],
 arg('-i', '--images', type=str, nargs='+', default=[])
 arg('-o', '--output', type=str, metavar='<file> | "-" (stdout)')
 
+arg('-l', '--labels', type=str, metavar='<labels file>')
+arg('--labels-reinit')
+arg('--labels-public')
+arg('--labels-source', type=str, metavar='<labels file>')
+
 arg('-p', '--play')
 arg('-k', '--keep')
 arg('-x', '--loop')
 arg('-t', '--time', type=float, default=600)
 arg('-q', '--queue', type=int, default=2)
+arg('-w', '--wait')
+arg('-s', '--subtitles')
 
 arg('--input', type=str, metavar='<file>')
 arg('--input-labels', type=str, metavar='<labels file>')
@@ -91,7 +93,7 @@ arg('--video-output', type=str, default='%s.video')
 arg('--audio-output', type=str, default='%s.audio')
 arg('--cache', metavar='<cache file>', type=str, default='%d.mp4')
 arg('--subtitles-output', type=str, default='%s.srt')
-arg('--subtitles')
+arg('--player-config', type=str, default='%s.conf')
 arg('--offset-reencode', type=float, default=-0.0415)
 arg('--offset-increment', type=float, default=-0.0245)
 arg('--offset-mixed', type=float, default=-0.045)

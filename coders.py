@@ -184,12 +184,17 @@ def play_video():
         sys.argv.extend(['--videos', 'any'])
         sys.argv.extend(['--videos-max-number', str(1)])
     sys.argv.extend(['--output-quality', 'low'])
-    video = args.output if args.output else str(uuid.uuid1()) + '.mp4'
+    video = '%d.' + output
+    if args.input:
+        open(args.player_config % output, 'w').write(
+            'MBTN_LEFT_DBL show-text ${=time-pos}')
     delay = args.output_max_length if args.output_max_length else 60
     tasks = int(args.time / delay) if args.loop else 1
     command = (
         'bash -c "' \
-            'mpv --fs ' + ' '.join(
+            'mpv ' \
+                '--input-conf=\'%s\' ' % args.player_config % output +
+                '--fs ' + ' '.join(
                 '--{ <( ' \
                     'sleep %d; ' \
                     'timeout --foreground %f ' \
@@ -202,21 +207,23 @@ def play_video():
                     '%s' \
                 '--} ' % (
                     max((i - 0.5) * delay, 0),
-                    args.queue * delay,
+                    args.queue * delay if not args.wait else 0,
                     args.queue,
-                    'python \\\'%s\\\' --output %s' % (
-                        '\\\' \\\''.join(
-                            arg.replace(' ', '\\ ').
-                                replace('(', '\\(').
-                                replace(')', '\\)').
-                                replace('&', '\\&')
-                            for arg in sys.argv
-                        ),
-                        video
-                    ),
-                    video,
-                    video if not args.keep else '',
-                    '--sub-file=\'%s\' ' % args.subtitles_output % video
+                    'python \\\'%s\\\'' % ('\\\' \\\''.join(
+                        arg.replace(' ', '\\ ').
+                            replace('(', '\\(').
+                            replace(')', '\\)').
+                            replace('&', '\\&')
+                        for arg in sys.argv + [
+                            '--output',
+                            args.output if args.output else video % i
+                        ]
+                    )),
+                    args.output if args.output else video % i,
+                    (args.output if args.output else video % i)
+                        if not args.keep else '',
+                    '--sub-file=\'%s\' ' % args.subtitles_output %
+                        (args.output if args.output else video % i)
                         if args.subtitles else '',
                     '--lavfi-complex=\'' \
                         '[vid2]scale=iw/4:ih/4[v],' \
@@ -229,3 +236,5 @@ def play_video():
         '"'
     )
     os.system(command)
+    if os.path.isfile(args.player_config % output):
+        os.remove(args.player_config % output)
