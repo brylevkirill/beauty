@@ -138,7 +138,7 @@ if __name__== '__main__':
         images.images = manager.list()
         random.seed(int.from_bytes(os.getrandom(4), 'big'))
         if not args.labels_reinit:
-            labels.read_labels(args.labels)
+            labels.read_labels()
         else:
             if args.labels_source:
                 shutil.copyfile(args.labels_source, args.labels)

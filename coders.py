@@ -1,3 +1,4 @@
+import inspect
 import itertools
 import os
 import signal
@@ -174,6 +175,26 @@ def write_video_with_audio():
         check=True
     )
 
+def swap_labels(source, target, timestamp):
+    import datetime
+    ts = datetime.datetime.utcfromtimestamp(timestamp)
+    t = ts.strftime('%H:%M:%S.%f')[:-3]
+    lines = []
+    lines.extend(
+        s for s in open(target).readlines()
+        if s.split()[1] <= t
+    )
+    lines.extend(
+        (s[:s.rindex('\t')] + s[-1])
+        for s in open(source).readlines()
+        if s.split()[0] <= t and t < s.split()[1]
+    )
+    lines.extend(
+        s for s in open(target).readlines()
+        if t < s.split()[0]
+    )
+    open(target, 'w').writelines(lines)
+
 def play_video():
     sys.argv.remove('--play')
     if args.loop:
@@ -185,11 +206,17 @@ def play_video():
         sys.argv.extend(['--videos-max-number', str(1)])
     sys.argv.extend(['--output-quality', 'low'])
     video = '%d.' + output
-    if args.input:
-        open(args.player_config % output, 'w').write(
-            'MBTN_LEFT_DBL show-text ${=time-pos}')
     delay = args.output_max_length if args.output_max_length else 60
     tasks = int(args.time / delay) if args.loop else 1
+    if args.input_labels:
+        open(args.player_config % output, 'w').write(
+            """MBTN_LEFT_DBL run python -c \"%s\"""" %
+                (inspect.getsource(swap_labels).replace('\n', '\\n') +
+                """swap_labels('%s', '%s', ${=time-pos})""" % (
+                    args.labels,
+                    args.input_labels,
+                ))
+        )
     command = (
         'bash -c "' \
             'mpv ' \
