@@ -45,6 +45,26 @@ def update_labels(new_labels):
                     labels[-1].output_start_pos
             )
 
+def update_labels_filter(source, target, timestamp):
+    import datetime
+    ts = datetime.datetime.utcfromtimestamp(timestamp)
+    t = ts.strftime('%H:%M:%S.%f')[:-3]
+    lines = []
+    lines.extend(
+        s for s in open(target).readlines()
+        if s.split()[1] <= t
+    )
+    lines.extend(
+        (s[:s.rindex('\t')] + s[-1])
+        for s in open(source).readlines()
+        if s.split()[0] <= t and t < s.split()[1]
+    )
+    lines.extend(
+        s for s in open(target).readlines()
+        if t < s.split()[0]
+    )
+    open(target, 'w').writelines(lines)
+
 def read_labels():
     labels[:] = [
         parse_label(s) for s in

@@ -1,6 +1,7 @@
 import inspect
 import itertools
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -9,6 +10,7 @@ import uuid
 import labels
 import videos
 from beauty import args, output
+from labels import update_labels_filter
 from videos import read_video, visual_effects
 
 def write_video(labels_before):
@@ -175,26 +177,6 @@ def write_video_with_audio():
         check=True
     )
 
-def swap_labels(source, target, timestamp):
-    import datetime
-    ts = datetime.datetime.utcfromtimestamp(timestamp)
-    t = ts.strftime('%H:%M:%S.%f')[:-3]
-    lines = []
-    lines.extend(
-        s for s in open(target).readlines()
-        if s.split()[1] <= t
-    )
-    lines.extend(
-        (s[:s.rindex('\t')] + s[-1])
-        for s in open(source).readlines()
-        if s.split()[0] <= t and t < s.split()[1]
-    )
-    lines.extend(
-        s for s in open(target).readlines()
-        if t < s.split()[0]
-    )
-    open(target, 'w').writelines(lines)
-
 def play_video():
     sys.argv.remove('--play')
     if args.loop:
@@ -208,15 +190,7 @@ def play_video():
     video = '%d.' + output
     delay = args.output_max_length if args.output_max_length else 60
     tasks = int(args.time / delay) if args.loop else 1
-    if args.input_labels:
-        open(args.player_config % output, 'w').write(
-            """MBTN_LEFT_DBL run python -c \"%s\"""" %
-                (inspect.getsource(swap_labels).replace('\n', '\\n') +
-                """swap_labels('%s', '%s', ${=time-pos})""" % (
-                    args.labels,
-                    args.input_labels,
-                ))
-        )
+    play_video_prepare()
     command = (
         'bash -c "' \
             'mpv ' \
@@ -229,7 +203,7 @@ def play_video():
                     'cat %s; ' \
                     'rm -f %s ' \
                     ') ' \
-                    '--stream-buffer-size=64MiB ' \
+                    '--stream-buffer-size=16MiB ' \
                     '%s' \
                     '%s' \
                 '--} ' % (
@@ -253,7 +227,7 @@ def play_video():
                         (args.output if args.output else video % i)
                         if args.subtitles else '',
                     '--lavfi-complex=\'' \
-                        '[vid2]scale=iw/4:ih/4[v],' \
+                        '[vid2]scale=iw/2:ih/2[v],' \
                         '[vid1][v]overlay=W-w:H-h[vo]\' ' \
                     '--external-file=\'%s\' ' % args.input
                         if args.input else ''
@@ -263,5 +237,25 @@ def play_video():
         '"'
     )
     os.system(command)
-    if os.path.isfile(args.player_config % output):
+    play_video_cleanup()
+
+def play_video_prepare():
+    if args.input_labels:
+        func = inspect.getsource(update_labels_filter).replace('\n', '\\n')
+        call = "update_labels_filter('%s', '%s', ${=time-pos})"
+        open(args.player_config % output, 'w').write(
+            """
+                MBTN_LEFT_DBL run python -c \"%s\"
+                MBTN_RIGHT_DBL run python -c \"%s\"
+                MBTN_RIGHT ignore
+            """ % (
+                func + call % (args.labels, args.input_labels),
+                func + call % ('.' + args.input_labels, args.input_labels)
+            )
+        )
+        shutil.copyfile(args.input_labels, '.' + args.input_labels)
+
+def play_video_cleanup():
+    if args.input_labels:
         os.remove(args.player_config % output)
+        os.remove('.' + args.input_labels)
