@@ -60,8 +60,11 @@ def write_video_reencode():
         '-filter_complex', ', '.join([concat_filter] + effects_filters),
         '-shortest',
         '-c:v', 'libx264',
-        *(['-preset', 'fast'] if args.output_quality == 'low' else []),
-        *(['-crf', '33'] if args.output_quality == 'low' else []),
+        *(['-crf', '17'] if args.output_quality == 'high' else
+            ['-crf', '33'] if args.output_quality == 'low' else []),
+        *(['-preset', 'slow'] if args.output_quality == 'high' else
+            ['-preset', 'fast'] if args.output_quality == 'low' else []),
+        *(['-tune', 'film'] if args.output_quality == 'high' else []),
         '-f', 'matroska',
         '-y',
         args.video_output if args.output != '-' else '-'
@@ -193,8 +196,9 @@ def play_video():
     play_video_prepare()
     command = (
         'bash -c "' \
-            'mpv ' \
-                '--input-conf=\'%s\' ' % args.player_config % output +
+            'mpv ' +
+                ('--input-conf=\'%s\' ' % ('.' + output + '.conf')
+                    if args.input and args.input_labels else '') +
                 '--fs ' + ' '.join(
                 '--{ <( ' \
                     'sleep %d; ' \
@@ -243,7 +247,7 @@ def play_video_prepare():
     if args.input_labels:
         func = inspect.getsource(update_labels_filter).replace('\n', '\\n')
         call = "update_labels_filter('%s', '%s', ${=time-pos})"
-        open(args.player_config % output, 'w').write(
+        open('.' + output + '.conf', 'w').write(
             """
                 MBTN_LEFT_DBL run python -c \"%s\"
                 MBTN_RIGHT_DBL run python -c \"%s\"
@@ -257,5 +261,5 @@ def play_video_prepare():
 
 def play_video_cleanup():
     if args.input_labels:
-        os.remove(args.player_config % output)
+        os.remove('.' + output + '.conf')
         os.remove('.' + args.input_labels)
