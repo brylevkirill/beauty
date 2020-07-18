@@ -18,7 +18,7 @@ class Label(typing.NamedTuple):
 labels = []
 
 def labels_created():
-    return all (
+    return all(
         l.input_file_name is not None and
         l.input_start_pos != -1 and
         l.input_end_pos != -1
@@ -65,14 +65,14 @@ def update_labels_filter(source, target, timestamp):
     )
     open(target, 'w').writelines(lines)
 
-def read_labels():
+def read_labels(file_name=args.labels):
     labels[:] = [
         parse_label(s) for s in
-        open(args.labels).read().splitlines()
-        ] if os.path.isfile(args.labels) else []
+        open(file_name).read().splitlines()
+        ] if os.path.isfile(file_name) else []
 
-def write_labels():
-    open(args.labels, 'w').writelines(format_label(l) for l in labels)
+def write_labels(file_name=args.labels, labels=labels):
+    open(file_name, 'w').writelines(format_label(l) for l in labels)
     if args.subtitles:
         write_subtitles(args.subtitles_output % output)
 

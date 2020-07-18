@@ -14,7 +14,7 @@ def youtube_collections(items, type):
                 if args.labels_public:
                     items.append('labeled')
                 else:
-                    items.append('orchestral')
+                    items.append('orchestra')
             elif type == 'video':
                 items[:] = random.sample(list(collections.values()), 1)[0]
                 if items[0][0:2] == 'PL':
@@ -44,8 +44,8 @@ def youtube_collections(items, type):
                         items.remove(item)
     if type == 'audio':
         audios = {
-            'orchestral': ['PL659KIPAkeqgZtrIadb7YXGlFJBqZp9SX'],
-            'electronic': ['PL659KIPAkeqgZhtIQKazFHTUaL5gXNLqD'],
+            'orchestra': ['PL659KIPAkeqgZtrIadb7YXGlFJBqZp9SX'],
+            'trance': ['PL659KIPAkeqjudXxn0pEdDIl4nAWRqFuV'],
             'labeled': [
                 'Ax_GJvCbGRc',
                 'u0-iGVgBaYs',

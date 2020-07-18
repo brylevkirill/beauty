@@ -28,7 +28,7 @@ def arg(*args, **kwargs):
 
 opt = '<file|URL> | <YT playlist URL> | "ytsearch"[""|<N>|"all"]":"<query>'
 arg('-a', '--audios', type=str, nargs='+', default=[],
-    metavar='(%s | "any"|"orchestral"|"electronic"|"labeled")' % opt)
+    metavar='(%s | "any"|"orchestra"|"trance"|"labeled")' % opt)
 arg('-v', '--videos', type=str, nargs='+', default=[],
     metavar='(%s | "any"|"flowers"|"nightsky"|"girls"|"girls2")' % opt)
 arg('-i', '--images', type=str, nargs='+', default=[])
@@ -38,6 +38,7 @@ arg('-l', '--labels', type=str, metavar='<labels file>')
 arg('--labels-reinit')
 arg('--labels-public')
 arg('--labels-source', type=str, metavar='<labels file>')
+arg('--labels-source-reinit')
 
 arg('-p', '--play')
 arg('-k', '--keep')
@@ -137,6 +138,8 @@ if __name__== '__main__':
         videos.videos = manager.dict()
         images.images = manager.list()
         random.seed(int.from_bytes(os.getrandom(4), 'big'))
+        if args.labels_source_reinit:
+            labels.write_labels(args.labels_source, videos.create_labels())
         if not args.labels_reinit:
             labels.read_labels()
         else:

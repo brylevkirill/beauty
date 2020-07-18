@@ -1,24 +1,19 @@
 import collections
-import cv2
-import dlib
-import functools
 import math
 import multiprocessing.pool
 import os
 import random
 import re
-import scipy.optimize
 import subprocess
-import tempfile
 import typing
 import validators
-import warnings
 
 import labels
 from audios import tempo
 from beauty import args
 from labels import labels_created, write_labels, Label
 from youtube import youtube_collections, youtube_playlists, youtube_video
+from filters import visual_filter, visual_filter_hard_cuts_base
 
 class Video(typing.NamedTuple):
     url: str
@@ -55,24 +50,23 @@ def read_videos():
     youtube_playlists(args.videos)
     if labels_created() and args.increment:
         return
-    while True:
-        if args.videos_max_number and len(args.videos) > args.videos_max_number:
-            args.videos = random.sample(args.videos, args.videos_max_number)
-        for l in labels.labels:
-            if (l.input_file_name is not None and
-                (os.path.isfile(l.input_file_name) or
-                validators.url(l.input_file_name.replace('---', '-'))) and
-                l.input_file_name not in args.videos):
-                args.videos.append(l.input_file_name)
-        if not args.videos:
-            raise Exception('No video file names or video URLs given.')
-        pool = multiprocessing.pool.ThreadPool(len(args.videos))
-        res = [pool.apply_async(read_video, (v, False)) for v in args.videos]
-        pool.close()
-        pool.join()
-        assert all(r.get() is None for r in res)
-        if all (v in videos for v in args.videos):
-            break
+    if args.videos_max_number and len(args.videos) > args.videos_max_number:
+        args.videos = random.sample(args.videos, args.videos_max_number)
+    for l in labels.labels:
+        if (l.input_file_name is not None and
+            (os.path.isfile(l.input_file_name) or
+            validators.url(l.input_file_name.replace('---', '-'))) and
+            l.input_file_name not in args.videos):
+            args.videos.append(l.input_file_name)
+    if not args.videos:
+        raise Exception('No video file names or video URLs given.')
+    pool = multiprocessing.pool.ThreadPool(len(args.videos))
+    result = [pool.apply_async(read_video, (v, False)) for v in args.videos]
+    pool.close()
+    pool.join()
+    assert all(r.get() is not None for r in result)
+    if not all (v in videos for v in args.videos):
+        raise Exception('Not all videos have been read.')
 
 def read_video(video_file_name, strict=True):
     if (validators.url(video_file_name) and
@@ -88,16 +82,39 @@ def read_video(video_file_name, strict=True):
             url=video_file_name,
             duration=duration(video_file_name)
         )
+    return videos[video_file_name]
+
+def create_labels():
+    labels = []
+    for video_file_name in args.videos:
+        video = read_video(video_file_name)
+        positions = [0]
+        positions.extend(
+            visual_filter_hard_cuts_base(
+                Label(
+                    input_file_name=video_file_name,
+                    input_start_pos=0,
+                    input_end_pos=video.duration
+                ),
+                video.url))
+        positions.append(video.duration)
+        labels.append(Label(
+            output_start_pos=0,
+            output_end_pos=0,
+            input_file_name=video_file_name,
+            input_start_pos=positions[:-1],
+            input_end_pos=positions[1:]))
+    return labels
 
 def update_labels():
     pool = multiprocessing.pool.Pool(os.cpu_count())
-    res = [
+    result = [
         pool.apply_async(check_label, (i,))
         for i in range(len(labels.labels))
     ]
     pool.close()
     pool.join()
-    assert all(r.get() is None for r in res)
+    assert all(r.get() is None for r in result)
 
 def check_label(n):
     retries = 0
@@ -119,11 +136,11 @@ def check_label(n):
                 url=args.cache % (n + 1),
                 duration=duration
             )
-            if visual_filter(cache_label, cache_video):
+            if visual_filter(cache_label, cache_video.url):
                 labels.labels[n] = label
                 break
         else:
-            if visual_filter(label, videos[label.input_file_name]):
+            if visual_filter(label, videos[label.input_file_name].url):
                 labels.labels[n] = label
                 break
         retries += 1
@@ -138,32 +155,43 @@ def check_label(n):
 def update_label(n):
     l = labels.labels[n]
     input_file_name = l.input_file_name if (
-        l.input_file_name is not None and (
+        l.input_file_name is not None and
         os.path.isfile(l.input_file_name) or
-        validators.url(l.input_file_name)
-        )) else next_input_file_name(n)
+        validators.url(l.input_file_name)) else (
+        next_input_file_name(n))
+    output_duration = l.output_end_pos - l.output_start_pos
     if type(l.input_start_pos) is not list:
+        input_duration = l.input_end_pos - l.input_start_pos
         input_start_pos = l.input_start_pos if (
             input_file_name is None or l.input_start_pos >= 0) else (
             next_input_start_pos(
-                n,
-                duration(input_file_name),
-                l.output_end_pos - l.output_start_pos))
+                n, duration(input_file_name), output_duration))
         input_end_pos = l.input_end_pos if (
             input_file_name is None or
             l.input_start_pos >= 0 and l.input_end_pos >= 0 and
-            abs((l.output_end_pos - l.output_start_pos) -
-                (l.input_end_pos - l.input_start_pos)) < 0.01) else (
-            input_start_pos + (l.output_end_pos - l.output_start_pos))
+            abs(output_duration - input_duration) < 0.01) else (
+            input_start_pos + output_duration)
     else:
-        index = random.randint(0, len(l.input_start_pos) - 1)
         if type(l.input_end_pos) is not list:
-            input_start_pos = l.input_start_pos[index]
+            i = random.randint(0, len(l.input_start_pos) - 1)
+            input_start_pos = l.input_start_pos[i]
         else:
+            assert len(l.input_start_pos) == len(l.input_end_pos)
+            position = random.uniform(0, sum(
+                l.input_end_pos[i] - l.input_start_pos[i]
+                for i in range(len(l.input_start_pos))
+                if l.input_end_pos[i] - l.input_start_pos[i] >=
+                    output_duration
+            ))
+            for i in range(len(l.input_start_pos)):
+                if (l.input_end_pos[i] - l.input_start_pos[i] >=
+                    output_duration):
+                    position -= l.input_end_pos[i] - l.input_start_pos[i]
+                    if position <= 0:
+                        break
             input_start_pos = random.uniform(
-                l.input_start_pos[index],
-                l.input_end_pos[index] - l.output_end_pos + l.output_start_pos)
-        input_end_pos = input_start_pos + l.output_end_pos - l.output_start_pos
+                l.input_start_pos[i], l.input_end_pos[i] - output_duration)
+        input_end_pos = input_start_pos + output_duration
     label_changed = (
         input_file_name != l.input_file_name or
         input_start_pos != l.input_start_pos or
@@ -194,7 +222,7 @@ def next_input_file_name(n):
         position = random.uniform(0, sum(v.duration for _, v in V))
         for file_name, video in V:
             position -= video.duration
-            if position < 0:
+            if position <= 0:
                 break
         return file_name
 
@@ -222,133 +250,3 @@ def cache_input(l: Label, n):
         ],
         check=True
     )
-
-def visual_filter(l: Label, v: Video):
-    if args.visual_filter_drop_face_less:
-        if not visual_filter_face_less(l, v):
-            return False
-    if args.visual_filter_drop_black_frame:
-        if not visual_filter_black_frame(l, v):
-            return False
-    if args.visual_filter_drop_hard_cuts:
-        if not visual_filter_hard_cuts(l, v):
-            return False
-    if args.visual_filter_drop_slow_pace:
-        if not visual_filter_slow_pace(l, v):
-            return False
-    return True
-
-def visual_filter_base(l: Label, v: Video, filter_expr, filter_func):
-    process = subprocess.run([
-        'ffmpeg',
-        '-loglevel', args.loglevel,
-        '-ss', str(l.input_start_pos),
-        '-t', str(l.input_end_pos - l.input_start_pos),
-        '-i', v.url,
-        '-vf', filter_expr,
-        '-f', 'null',
-        '-'
-        ],
-        check=True,
-        stderr=subprocess.PIPE
-    )
-    return filter_func(process.stderr.decode())
-
-def visual_filter_black_frame(l: Label, v: Video):
-    visual_filter_base(l, v, 'blackframe', lambda x: 'pblack:' not in x)
-
-def visual_filter_hard_cuts(l: Label, v: Video):
-    filter_expr = ('select=\'gt(scene,%f)\',showinfo' %
-        args.visual_filter_drop_hard_cuts_prob)
-    visual_filter_base(l, v, filter_expr, lambda x: 'pts_time:' not in x)
-
-def visual_filter_slow_pace(l: Label, v: Video):
-    filter_expr = ('select=\'gt(scene,%f)\',showinfo' %
-        args.visual_filter_drop_slow_pace_prob)
-    def filter_func(x):
-        fast_frames_number = x.count('pts_time:')
-        return (fast_frames_number / frames_number(v.url)
-            >= args.visual_filter_drop_slow_pace_rate)
-    visual_filter_base(l, v, filter_expr, filter_func)
-
-def visual_filter_face_less(l: Label, v: Video):
-    _, frame_file_name = tempfile.mkstemp(suffix='.png')
-    process = subprocess.run([
-        'ffmpeg',
-        '-loglevel', args.loglevel,
-        '-ss', str((l.input_start_pos + l.input_end_pos) / 2),
-        '-i', v.url,
-        '-frames:v', str(1),
-        '-vcodec', 'png',
-        '-y', frame_file_name
-        ],
-        check=True
-    )
-    frame = cv2.cvtColor(cv2.imread(frame_file_name), cv2.COLOR_BGR2RGB)
-    os.remove(frame_file_name)
-    return not not dlib.get_frontal_face_detector()(frame)
-
-def visual_effects():
-    effects = []
-    if args.visual_effect_speedup:
-        effects.append(visual_effects_speedup_cosine)
-    if args.visual_effect_zooming:
-        effects.append(visual_effects_zooming)
-    filters = []
-    mappers = []
-    for e in effects:
-        filter, mapper = e()
-        filters.append(filter)
-        mappers.append(mapper)
-    return filters, mappers
-
-def visual_effects_speedup_cosine():
-    audio_tempo = (tempo(args.audio_output) *
-        args.visual_effect_speedup_tempo_multi)
-    def f(x, p, y):
-        x0 = x * p + math.pi / 2
-        return (2 * (x0 - x0 % math.pi) / math.pi
-            - math.cos(x0 % math.pi)) / p - y
-    warnings.filterwarnings(
-        'ignore', 'The iteration is not making good progress')
-    def fx(p, y):
-        return f(math.pi / p, p, y)
-    p = scipy.optimize.fsolve(functools.partial(fx, y=audio_tempo), 1)[0]
-    filter = 'setpts=\'' \
-        '(2 * (T * %.3f + PI / 2 - mod(T * %.3f + PI / 2, PI)) / PI' \
-        '- cos(mod(T * %.3f + PI / 2, PI))) / %.3f / TB\'' % tuple([p] * 4)
-    def mapper(y):
-        return scipy.optimize.fsolve(functools.partial(f, p=p, y=y), y)[0]
-    return filter, mapper
-
-def visual_effects_speedup_custom():
-    mapping = [(
-        labels.labels[i].output_start_pos,
-        labels.labels[i].output_end_pos,
-        (i % 2) * 3 + 1
-        ) for i in range(len(labels.labels))
-    ]
-    reverse_mapping = []
-    filter = '%s'
-    time = 0
-    for (start, end, speed) in mapping:
-        delta = (end - start) / speed
-        filter = filter % ('if(lt(T,%f),%f+(T-%f)/%f,%%s)' % (
-            time + delta,
-            start,
-            time,
-            speed))
-        reverse_mapping.append((time, time + delta, speed))
-        time += delta
-    filter = 'setpts=\'%s / TB\'' % filter % end
-    def mapper(y):
-        time = 0
-        for (start, end, speed) in reverse_mapping:
-            if start <= y <= end:
-                return time + (y - start) * speed
-            time += (end - start) * speed
-        return time
-    return filter, mapper
-
-def visual_effects_zooming():
-    return '', lambda x: x

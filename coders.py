@@ -11,7 +11,8 @@ import labels
 import videos
 from beauty import args, output
 from labels import update_labels_filter
-from videos import read_video, visual_effects
+from videos import read_video
+from effects import visual_effects
 
 def write_video(labels_before):
     if not labels.labels_created():
