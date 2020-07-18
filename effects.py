@@ -1,8 +1,10 @@
 import functools
+import math
 import scipy.optimize
 import warnings
 
 from beauty import args
+from audios import tempo
 
 def visual_effects():
     effects = []

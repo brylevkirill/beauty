@@ -65,14 +65,17 @@ def update_labels_filter(source, target, timestamp):
     )
     open(target, 'w').writelines(lines)
 
-def read_labels(file_name=args.labels):
+def read_labels(custom_file_name=None):
+    file_name = args.labels if custom_file_name is None else custom_file_name
     labels[:] = [
-        parse_label(s) for s in
-        open(file_name).read().splitlines()
+        parse_label(s) for s in open(file_name).read().splitlines()
         ] if os.path.isfile(file_name) else []
 
-def write_labels(file_name=args.labels, labels=labels):
-    open(file_name, 'w').writelines(format_label(l) for l in labels)
+def write_labels(custom_file_name=None, custom_labels=None):
+    file_name = args.labels if custom_file_name is None else custom_file_name
+    open(file_name, 'w').writelines(
+        format_label(l) for l in (
+            labels if custom_labels is None else custom_labels))
     if args.subtitles:
         write_subtitles(args.subtitles_output % output)
 

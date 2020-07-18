@@ -1,5 +1,4 @@
 import collections
-import math
 import multiprocessing.pool
 import os
 import random
@@ -9,7 +8,6 @@ import typing
 import validators
 
 import labels
-from audios import tempo
 from beauty import args
 from labels import labels_created, write_labels, Label
 from youtube import youtube_collections, youtube_playlists, youtube_video
@@ -155,9 +153,9 @@ def check_label(n):
 def update_label(n):
     l = labels.labels[n]
     input_file_name = l.input_file_name if (
-        l.input_file_name is not None and
+        l.input_file_name is not None and (
         os.path.isfile(l.input_file_name) or
-        validators.url(l.input_file_name)) else (
+        validators.url(l.input_file_name))) else (
         next_input_file_name(n))
     output_duration = l.output_end_pos - l.output_start_pos
     if type(l.input_start_pos) is not list:
@@ -165,7 +163,9 @@ def update_label(n):
         input_start_pos = l.input_start_pos if (
             input_file_name is None or l.input_start_pos >= 0) else (
             next_input_start_pos(
-                n, duration(input_file_name), output_duration))
+                n,
+                duration(input_file_name),
+                output_duration))
         input_end_pos = l.input_end_pos if (
             input_file_name is None or
             l.input_start_pos >= 0 and l.input_end_pos >= 0 and
@@ -177,20 +177,23 @@ def update_label(n):
             input_start_pos = l.input_start_pos[i]
         else:
             assert len(l.input_start_pos) == len(l.input_end_pos)
-            position = random.uniform(0, sum(
-                l.input_end_pos[i] - l.input_start_pos[i]
-                for i in range(len(l.input_start_pos))
-                if l.input_end_pos[i] - l.input_start_pos[i] >=
-                    output_duration
-            ))
+            position = next_input_start_pos(
+                n, 
+                sum(l.input_end_pos[i] - l.input_start_pos[i]
+                    for i in range(len(l.input_start_pos))
+                    if l.input_end_pos[i] - l.input_start_pos[i] >=
+                        output_duration),
+                output_duration)
             for i in range(len(l.input_start_pos)):
                 if (l.input_end_pos[i] - l.input_start_pos[i] >=
                     output_duration):
                     position -= l.input_end_pos[i] - l.input_start_pos[i]
                     if position <= 0:
                         break
-            input_start_pos = random.uniform(
-                l.input_start_pos[i], l.input_end_pos[i] - output_duration)
+            input_start_pos = l.input_start_pos[i] + next_input_start_pos(
+                n,
+                l.input_end_pos[i] - l.input_start_pos[i],
+                output_duration)
         input_end_pos = input_start_pos + output_duration
     label_changed = (
         input_file_name != l.input_file_name or

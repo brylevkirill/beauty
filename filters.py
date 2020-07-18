@@ -46,12 +46,12 @@ def visual_filter_hard_cuts_base(label: Label, video):
     filter_expr = ('select=\'gt(scene,%f)\',showinfo' %
         args.visual_filter_drop_hard_cuts_prob)
     def filter_func(x):
-        return [float(s.split('pts_time:')[1].split()[0])
-            for s in x.splitlines() if 'pts_time:' in s]
+        return (float(s.split('pts_time:')[1].split()[0])
+            for s in x.splitlines() if 'pts_time:' in s)
     return visual_filter_base(label, video, filter_expr, filter_func)
 
 def visual_filter_hard_cuts(label: Label, video):
-    return next(visual_filter_hard_cuts_base(label, video), None) is None
+    return next(iter(visual_filter_hard_cuts_base(label, video)), None) is None
 
 def visual_filter_slow_pace(label: Label, video):
     filter_expr = ('select=\'gt(scene,%f)\',showinfo' %
