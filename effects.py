@@ -41,16 +41,16 @@ def visual_effects_speedup_cosine():
 
 def visual_effects_speedup_custom():
     mapping = [(
-        labels.labels[i].output_start_pos,
-        labels.labels[i].output_end_pos,
+        labels.labels[i].output_start_point,
+        labels.labels[i].output_final_point,
         (i % 2) * 3 + 1
         ) for i in range(len(labels.labels))
     ]
     inverse_mapping = []
     filter = '%s'
     time = 0
-    for (start, end, speed) in mapping:
-        delta = (end - start) / speed
+    for (start, final, speed) in mapping:
+        delta = (final - start) / speed
         filter = filter % ('if(lt(T,%f),%f+(T-%f)/%f,%%s)' % (
             time + delta,
             start,
@@ -58,13 +58,13 @@ def visual_effects_speedup_custom():
             speed))
         inverse_mapping.append((time, time + delta, speed))
         time += delta
-    filter = 'setpts=\'%s / TB\'' % filter % end
+    filter = 'setpts=\'%s / TB\'' % filter % final
     def mapper(y):
         time = 0
-        for (start, end, speed) in inverse_mapping:
-            if start <= y <= end:
+        for (start, final, speed) in inverse_mapping:
+            if start <= y <= final:
                 return time + (y - start) * speed
-            time += (end - start) * speed
+            time += (final - start) * speed
         return time
     return filter, mapper
 

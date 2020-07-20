@@ -14,22 +14,22 @@ from beauty import args
 from labels import Label
 from youtube import youtube_collections, youtube_playlists, youtube_video
 
-def property(media_file_name, stream, prop):
+def property(media_url, stream, prop):
     process = subprocess.run([
         'ffprobe',
         '-select_streams', stream,
         '-show_entries', 'stream=%s' % prop,
         '-of', 'default=noprint_wrappers=1:nokey=1',
         '-v', 'quiet',
-        media_file_name
+        media_url
         ],
         check=True,
         stdout=subprocess.PIPE
     )
     return float(process.stdout.decode())
 
-def duration(audio_file_name):
-    return property(audio_file_name, 'a:0', 'duration')
+def duration(audio_url):
+    return property(audio_url, 'a:0', 'duration')
 
 def tempo(audio_file_name):
     proc = madmom.features.chords.DeepChromaChordRecognitionProcessor()
@@ -149,8 +149,8 @@ def create_labels():
         ]
     return [
         Label(
-            output_start_pos=L[i],
-            output_end_pos=L[i + 1]
+            output_start_point=L[i],
+            output_final_point=L[i + 1]
         )
         for i in range(len(L) - 1)
     ]

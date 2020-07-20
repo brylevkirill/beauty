@@ -78,6 +78,8 @@ arg('--create-labels-from-notes-cnn')
 
 arg('--visual-filter-retries', type=int, default=5)
 arg('--visual-filter-chrono')
+arg('--visual-filter-chrono-scope', type=float)
+arg('--visual-filter-chrono-speed', type=float)
 arg('--visual-filter-drop-black-frame')
 arg('--visual-filter-drop-hard-cuts')
 arg('--visual-filter-drop-hard-cuts-prob', type=float, default=0.05)

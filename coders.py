@@ -34,8 +34,8 @@ def write_video(labels_before):
 
 def write_video_reencode():
     for l in labels.labels:
-        if l.input_file_name not in videos.videos:
-            read_video(l.input_file_name)
+        if l.input_url not in videos.videos:
+            read_video(l.input_url)
     def apply(functions, x):
         y = x
         for f in functions:
@@ -47,16 +47,16 @@ def write_video_reencode():
         'ffmpeg',
         '-loglevel', args.loglevel] +
         list(itertools.chain.from_iterable([
-            '-ss', str(l.input_start_pos),
+            '-ss', str(l.input_start_point),
             '-t', '%.3f' % max(0,
-                apply(effects_mappers, l.output_end_pos) -
-                apply(effects_mappers, l.output_start_pos) +
+                apply(effects_mappers, l.output_final_point) -
+                apply(effects_mappers, l.output_start_point) +
                 args.offset_reencode),
-            '-i', videos.videos[l.input_file_name].url
+            '-i', videos.videos[l.input_url].url
             ] for l in labels.labels
                    )) + [
         '-t', str(args.output_max_length or
-            labels.labels[-1].output_end_pos),
+            labels.labels[-1].output_final_point),
         '-i', args.audio_output,
         '-filter_complex', ', '.join([concat_filter] + effects_filters),
         '-shortest',
@@ -147,8 +147,8 @@ def write_video_mixed_increment(labels_before):
                     'inpoint %f\n' \
                     'outpoint %f\n' % (
                     output,
-                    labels.labels[i0].output_start_pos,
-                    labels.labels[i - 1].output_end_pos +
+                    labels.labels[i0].output_start_point,
+                    labels.labels[i - 1].output_final_point +
                         args.offset_mixed
                     )).encode()
                 )
@@ -170,10 +170,10 @@ def write_video_with_audio():
         'ffmpeg',
         '-loglevel', args.loglevel,
         '-t', str(args.output_max_length or
-            labels.labels[-1].output_end_pos),
+            labels.labels[-1].output_final_point),
         '-i', args.video_output,
         '-t', str(args.output_max_length or
-            labels.labels[-1].output_end_pos),
+            labels.labels[-1].output_final_point),
         '-i', args.audio_output,
         '-c', 'copy',
         '-y', output
