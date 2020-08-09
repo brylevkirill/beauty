@@ -15,6 +15,10 @@ import uuid
 # - applying visual effects
 # - encoding/writing videos (reencoding/incrementing)
 # - playing created videos
+# - editing created videos
+
+# sample videos:
+# https://youtube.com/playlist?list=PL659KIPAkeqh4xPJF2BaUClsliKemfN5K
 
 parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -28,7 +32,7 @@ def arg(*args, **kwargs):
 
 opt = '<file|URL> | <YT playlist URL> | "ytsearch"[""|<N>|"all"]":"<query>'
 arg('-a', '--audios', type=str, nargs='+', default=[],
-    metavar='(%s | "any"|"orchestra"|"trance"|"labeled")' % opt)
+    metavar='(%s | "any"|"orchestra"|"electronic"|"labeled")' % opt)
 arg('-v', '--videos', type=str, nargs='+', default=[],
     metavar='(%s | "any"|"flowers"|"nightsky"|"girls"|"girls2")' % opt)
 arg('-i', '--images', type=str, nargs='+', default=[])
@@ -60,21 +64,21 @@ arg('--output-format', type=str, default='mp4')
 arg('--output-quality', type=str,
     choices=['high', 'medium', 'low'], default='medium')
 
-arg('--create-labels-min-length', type=float, default=0.2)
-arg('--create-labels-max-length', type=float)
-arg('--create-labels-joins', type=int, default=1)
-arg('--create-labels-splits', type=int, default=1)
-arg('--create-labels-from-chords')
-arg('--create-labels-from-chords-chroma')
-arg('--create-labels-from-chords-cnn')
-arg('--create-labels-from-beats')
-arg('--create-labels-from-beats-detection')
-arg('--create-labels-from-beats-tracking')
-arg('--create-labels-from-beats-detection-crf')
-arg('--create-labels-from-beats-tracking-dbn')
-arg('--create-labels-from-notes')
-arg('--create-labels-from-notes-rnn')
-arg('--create-labels-from-notes-cnn')
+arg('--labels-min-length', type=float, default=0.2)
+arg('--labels-max-length', type=float)
+arg('--labels-joins', type=int, default=1)
+arg('--labels-splits', type=int, default=1)
+arg('--labels-from-chords')
+arg('--labels-from-chords-chroma')
+arg('--labels-from-chords-cnn')
+arg('--labels-from-beats')
+arg('--labels-from-beats-detection')
+arg('--labels-from-beats-tracking')
+arg('--labels-from-beats-detection-crf')
+arg('--labels-from-beats-tracking-dbn')
+arg('--labels-from-notes')
+arg('--labels-from-notes-rnn')
+arg('--labels-from-notes-cnn')
 
 arg('--visual-filter-retries', type=int, default=5)
 arg('--visual-filter-chrono')

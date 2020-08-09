@@ -45,7 +45,7 @@ def youtube_collections(items, type):
     if type == 'audio':
         audios = {
             'orchestra': ['PL659KIPAkeqgZtrIadb7YXGlFJBqZp9SX'],
-            'trance': ['PL659KIPAkeqjudXxn0pEdDIl4nAWRqFuV'],
+            'electronic': ['PL659KIPAkeqjudXxn0pEdDIl4nAWRqFuV'],
             'labeled': [
                 'Ax_GJvCbGRc',
                 'u0-iGVgBaYs',

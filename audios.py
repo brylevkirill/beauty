@@ -106,45 +106,45 @@ def read_audio(audio):
     return True
 
 def create_labels():
-    if (not args.create_labels_from_chords and
-       not args.create_labels_from_beats and
-       not args.create_labels_from_notes):
-        args.create_labels_from_chords = True
+    if (not args.labels_from_chords and
+       not args.labels_from_beats and
+       not args.labels_from_notes):
+        args.labels_from_chords = True
     L = sorted(set([
         0,
         *(labels_from_chords(args.audio_output)
-            if args.create_labels_from_chords else []),
+            if args.labels_from_chords else []),
         *(labels_from_beats(args.audio_output)
-            if args.create_labels_from_beats else []),
+            if args.labels_from_beats else []),
         *(labels_from_notes(args.audio_output)
-            if args.create_labels_from_notes else []),
+            if args.labels_from_notes else []),
         duration(args.audio_output)
     ]))
     if args.output_max_length:
         L[:] = [l for l in L if l < args.output_max_length
             ] + [args.output_max_length]
-    if args.create_labels_joins > 1:
-        L[:] = L[::args.create_labels_joins]
-    if args.create_labels_splits > 1:
+    if args.labels_joins > 1:
+        L[:] = L[::args.labels_joins]
+    if args.labels_splits > 1:
         L[:] = [
-            L[i] + (L[i + 1] - L[i]) * j / args.create_labels_splits
+            L[i] + (L[i + 1] - L[i]) * j / args.labels_splits
             for i in range(len(L) - 1)
-            for j in range(args.create_labels_splits)
+            for j in range(args.labels_splits)
         ]
-    if args.create_labels_max_length:
+    if args.labels_max_length:
         L[:] = [
-            L[i] + j * args.create_labels_max_length
+            L[i] + j * args.labels_max_length
             for i in range(len(L) - 1)
             for j in range(1 +
-                int((L[i + 1] - L[i]) / args.create_labels_max_length))
+                int((L[i + 1] - L[i]) / args.labels_max_length))
         ]
-    if args.create_labels_min_length:
+    if args.labels_min_length:
         L_last = [L[0]]
         L[1:-1] = [
             L[i]
             for i in range(1, len(L) - 1)
-            if L[i] - L_last[0] >= args.create_labels_min_length and
-                L[-1] - L[i] >= args.create_labels_min_length and
+            if L[i] - L_last[0] >= args.labels_min_length and
+                L[-1] - L[i] >= args.labels_min_length and
                 not L_last.remove(L_last[0]) and not L_last.append(L[i])
         ]
     return [
@@ -156,19 +156,19 @@ def create_labels():
     ]
 
 def labels_from_chords(audio_file_name):
-    if (not args.create_labels_from_chords_chroma and
-        not args.create_labels_from_chords_cnn):
-        args.create_labels_from_chords_chroma = True
+    if (not args.labels_from_chords_chroma and
+        not args.labels_from_chords_cnn):
+        args.labels_from_chords_chroma = True
     proc = []
     feat = []
-    if args.create_labels_from_chords_chroma:
+    if args.labels_from_chords_chroma:
         proc.append(
             madmom.features.chords.DeepChromaChordRecognitionProcessor()
         )
         feat.append(madmom.audio.chroma.DeepChromaProcessor()(
             audio_file_name
         ))
-    if args.create_labels_from_chords_cnn:
+    if args.labels_from_chords_cnn:
         proc.append(
             madmom.features.chords.CRFChordRecognitionProcessor()
         )
@@ -180,27 +180,27 @@ def labels_from_chords(audio_file_name):
     ))
 
 def labels_from_beats(audio_file_name):
-    if (not args.create_labels_from_beats_detection and
-        not args.create_labels_from_beats_tracking and
-        not args.create_labels_from_beats_detection_crf and
-        not args.create_labels_from_beats_tracking_dbn):
-        args.create_labels_from_beats_tracking_dbn = True
+    if (not args.labels_from_beats_detection and
+        not args.labels_from_beats_tracking and
+        not args.labels_from_beats_detection_crf and
+        not args.labels_from_beats_tracking_dbn):
+        args.labels_from_beats_tracking_dbn = True
     proc = []
-    if args.create_labels_from_beats_detection:
+    if args.labels_from_beats_detection:
         proc.append(madmom.features.beats.BeatDetectionProcessor(
             fps=100
         ))
-    if args.create_labels_from_beats_tracking:
+    if args.labels_from_beats_tracking:
         proc.append(madmom.features.beats.BeatTrackingProcessor(
             fps=100
         ))
-    if args.create_labels_from_beats_detection_crf:
+    if args.labels_from_beats_detection_crf:
         proc.append(madmom.features.beats.CRFBeatDetectionProcessor(
             min_bpm=50,
             max_bpm=100,
             fps=100
         ))
-    if args.create_labels_from_beats_tracking_dbn:
+    if args.labels_from_beats_tracking_dbn:
         proc.append(madmom.features.beats.DBNBeatTrackingProcessor(
             min_bpm=50,
             max_bpm=100,
@@ -212,12 +212,12 @@ def labels_from_beats(audio_file_name):
     ))
 
 def labels_from_notes(audio_file_name):
-    if (not args.create_labels_from_notes_rnn and
-        not args.create_labels_from_notes_cnn):
-        args.create_labels_from_notes_rnn = True
+    if (not args.labels_from_notes_rnn and
+        not args.labels_from_notes_cnn):
+        args.labels_from_notes_rnn = True
     proc = []
     act = []
-    if args.create_labels_from_notes_rnn:
+    if args.labels_from_notes_rnn:
         proc.append(madmom.features.notes.NoteOnsetPeakPickingProcessor(
             fps=100,
             pitch_offset=21
@@ -225,7 +225,7 @@ def labels_from_notes(audio_file_name):
         act.append(madmom.features.notes.RNNPianoNoteProcessor()(
             audio_file_name
         ))
-    if args.create_labels_from_notes_cnn:
+    if args.labels_from_notes_cnn:
         proc.append(madmom.features.notes.ADSRNoteTrackingProcessor())
         act.append(madmom.features.notes.CNNPianoNoteProcessor()(
             audio_file_name

@@ -177,7 +177,7 @@ def update_label(n):
             input_start_point = l.input_start_point[i]
         else:
             assert len(l.input_start_point) == len(l.input_final_point)
-            duration = next_input_start_point(
+            position = next_input_start_point(
                 n, 
                 sum(l.input_final_point[i] - l.input_start_point[i]
                     for i in range(len(l.input_start_point))
@@ -187,12 +187,12 @@ def update_label(n):
             for i in range(len(l.input_start_point)):
                 input_duration = l.input_final_point[i] - l.input_start_point[i]
                 if input_duration >= output_duration:
-                    if duration <= input_duration:
+                    if position <= input_duration:
                         break
                     else:
-                        duration -= input_duration
-            input_start_point = l.input_start_point[i] + duration if (
-                l.input_start_point[i] + duration <
+                        position -= input_duration
+            input_start_point = l.input_start_point[i] + position if (
+                l.input_start_point[i] + position <
                     l.input_final_point[i] - output_duration) else (
                 random.uniform(
                     l.input_start_point[i],
