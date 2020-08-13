@@ -5,7 +5,7 @@ import shutil
 import signal
 import subprocess
 import sys
-import validators
+import urllib.parse
 
 import labels
 import videos
@@ -23,15 +23,17 @@ def write_video(labels_before):
         write_video_reencode()
     elif args.increment:
         write_video_increment()
-    if args.audios:
-        write_video_with_audio()
-        if os.path.isfile(args.audio_output):
-            os.remove(args.audio_output)
-        os.remove(args.video_output)
-    else:
-        os.replace(args.video_output, output)
+    if args.increment:
+        if args.audios:
+            write_video_with_audio()
+            if os.path.isfile(args.audio_output):
+                os.remove(args.audio_output)
+            os.remove(args.video_output)
+        else:
+            os.replace(args.video_output, output)
 
 def write_video_reencode():
+    stream_output = urllib.parse.urlparse(args.output).scheme
     for l in labels.labels:
         if l.input_url not in videos.videos:
             read_video(l.input_url)
@@ -65,9 +67,10 @@ def write_video_reencode():
         *(['-preset', 'slow'] if args.output_quality == 'high' else
             ['-preset', 'fast'] if args.output_quality == 'low' else []),
         *(['-tune', 'film'] if args.output_quality == 'high' else []),
-        '-f', 'matroska',
+        '-f', args.output_format,
+        '-c:a', 'copy',
         '-y',
-        args.video_output
+        args.output if stream_output else args.video_output
         ],
         check=True
     )
@@ -80,7 +83,7 @@ def write_video_increment():
         '-f', 'concat',
         '-safe', '0',
         '-i', 'pipe:',
-        '-c', 'copy',
+        '-c:v', 'copy',
         '-an',
         '-y',
         args.video_output
@@ -89,7 +92,10 @@ def write_video_increment():
         stderr=subprocess.PIPE
     )
     process.stdin.writelines(
-        ('file \'%s\'\n' % args.cache % (i + 1)).encode()
+        ('file \'%s\'\n' % args.cache % (
+            i + 1,
+            args.output_format
+        )).encode()
         for i in range(len(labels.labels))
     )
     _, errors = process.communicate()
@@ -107,8 +113,10 @@ def write_video_mixed_reencode():
         'ffmpeg',
         '-loglevel', args.loglevel] +
         list(itertools.chain.from_iterable([
-            '-i', args.cache % (i + 1)
-            ] for i in range(len(labels.labels))
+            '-i', args.cache % (
+                i + 1,
+                args.output_format
+            )] for i in range(len(labels.labels))
         )) + [
         '-filter_complex', 'concat=n=%d' % len(labels.labels),
         '-an',
@@ -132,7 +140,7 @@ def write_video_mixed_increment(labels_before):
         '-f', 'concat',
         '-safe', '0',
         '-i', 'pipe:',
-        '-c', 'copy',
+        '-c:v', 'copy',
         '-an',
         '-y',
         args.video_output
@@ -157,8 +165,10 @@ def write_video_mixed_increment(labels_before):
                 i0 = -1
             if i < len(labels.labels):
                 process.stdin.write((
-                    'file \'%s\'\n' % args.cache % (i + 1)
-                    ).encode()
+                    'file \'%s\'\n' % args.cache % (
+                        i + 1,
+                        args.output_format
+                    )).encode()
                 )
         else:
             if i0 == -1:
@@ -168,6 +178,7 @@ def write_video_mixed_increment(labels_before):
         raise Exception(errors)
 
 def write_video_with_audio():
+    stream_output = urllib.parse.urlparse(args.output).scheme
     subprocess.run([
         'ffmpeg',
         '-loglevel', args.loglevel,
@@ -178,9 +189,9 @@ def write_video_with_audio():
             labels.labels[-1].output_final_point),
         '-i', args.audio_output,
         '-c', 'copy',
-        *(['-f', args.output_format] if args.output_format else []),
+        '-f', args.output_format,
         '-y',
-        args.output if validators.url(args.output) else output
+        args.output if stream_output else output
         ],
         check=True
     )

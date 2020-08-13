@@ -3,8 +3,8 @@ import os
 import random
 import shutil
 import sys
+import urllib.parse
 import uuid
-import validators
 
 # implemented functionality:
 # - reading audios & videos
@@ -97,10 +97,12 @@ arg('--visual-effect-speedup')
 arg('--visual-effect-speedup-tempo-multi', type=float, default=1)
 arg('--visual-effect-zooming')
 
-arg('--loglevel', default='repeat+level+warning')
+arg('--loglevel', type=str,
+    choices=['repeat+level+warning', 'repeat+level+verbose'],
+    default='repeat+level+warning')
 arg('--video-output', type=str, default='%s.video')
 arg('--audio-output', type=str, default='%s.audio')
-arg('--cache', metavar='<cache file>', type=str, default='%d.mp4')
+arg('--cache', metavar='<cache files>', type=str, default='cache.%s.%s')
 arg('--subtitles-output', type=str, default='%s.srt')
 arg('--offset-reencode', type=float, default=-0.0415)
 arg('--offset-increment', type=float, default=-0.0245)
@@ -108,11 +110,12 @@ arg('--offset-mixed', type=float, default=-0.045)
 
 args = parser.parse_args()
 
-output = ('output.%s.%s' % (str(uuid.uuid1()), args.output_format)
-    if not args.output or args.output == '-' or validators.url(args.output)
-    else args.output)
-if not output.endswith('.' + args.output_format):
-    args.output_format = output[output.rfind('.') + 1:]
+output = (
+    'output.%s.%s' % (uuid.uuid1(), args.output_format)
+    if not args.output or args.output == '-' or
+        urllib.parse.urlparse(args.output).scheme
+    else args.output
+)
 args.video_output = args.video_output % output + '.' + args.output_format
 args.audio_output = args.audio_output % output + '.m4a'
 if not args.labels or not os.path.isfile(args.labels):

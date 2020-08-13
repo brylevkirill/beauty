@@ -106,6 +106,17 @@ def read_audio(audio):
     return True
 
 def create_labels():
+    if (args.labels_from_chords_chroma or
+        args.labels_from_chords_cnn):
+        args.labels_from_chords = True
+    if (args.labels_from_beats_detection or
+        args.labels_from_beats_tracking or
+        args.labels_from_beats_detection_crf or
+        args.labels_from_beats_tracking_dbn):
+        args.labels_from_beats = True
+    if (args.labels_from_notes_rnn or
+        args.labels_from_notes_cnn):
+        args.labels_from_notes = True
     if (not args.labels_from_chords and
        not args.labels_from_beats and
        not args.labels_from_notes):
