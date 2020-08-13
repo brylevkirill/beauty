@@ -4,21 +4,22 @@ import random
 import shutil
 import sys
 import uuid
+import validators
 
 # implemented functionality:
 # - reading audios & videos
 # - YT videos/lists/search
 # - reading/writing labels
-# - creating labels (audio)
-# - creating labels (video)
+# - creating labels (audio) (analyzing audio track)
+# - creating labels (video) (analyzing video track)
 # - applying visual filters
 # - applying visual effects
 # - encoding/writing videos (reencoding/incrementing)
-# - playing created videos
-# - editing created videos
+# - playing created videos (during encoding/writing)
+# - editing created videos (picture-in-picture mode)
 
 # sample videos:
-# https://youtube.com/playlist?list=PL659KIPAkeqh4xPJF2BaUClsliKemfN5K
+# - https://youtube.com/playlist?list=PL659KIPAkeqh4xPJF2BaUClsliKemfN5K
 
 parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -32,7 +33,7 @@ def arg(*args, **kwargs):
 
 opt = '<file|URL> | <YT playlist URL> | "ytsearch"[""|<N>|"all"]":"<query>'
 arg('-a', '--audios', type=str, nargs='+', default=[],
-    metavar='(%s | "any"|"orchestra"|"electronic"|"labeled")' % opt)
+    metavar='(%s | "any"|"orchestral"|"electronic"|"labeled")' % opt)
 arg('-v', '--videos', type=str, nargs='+', default=[],
     metavar='(%s | "any"|"flowers"|"nightsky"|"girls"|"girls2")' % opt)
 arg('-i', '--images', type=str, nargs='+', default=[])
@@ -107,8 +108,8 @@ arg('--offset-mixed', type=float, default=-0.045)
 
 args = parser.parse_args()
 
-output = ('output.' + str(uuid.uuid1()) + '.mp4'
-    if not args.output or args.output == '-'
+output = ('output.%s.%s' % (str(uuid.uuid1()), args.output_format)
+    if not args.output or args.output == '-' or validators.url(args.output)
     else args.output)
 if not output.endswith('.' + args.output_format):
     args.output_format = output[output.rfind('.') + 1:]

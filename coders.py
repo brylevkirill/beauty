@@ -5,7 +5,7 @@ import shutil
 import signal
 import subprocess
 import sys
-import uuid
+import validators
 
 import labels
 import videos
@@ -23,14 +23,13 @@ def write_video(labels_before):
         write_video_reencode()
     elif args.increment:
         write_video_increment()
-    if args.output != '-':
-        if args.audios:
-            write_video_with_audio()
-            if os.path.isfile(args.audio_output):
-                os.remove(args.audio_output)
-            os.remove(args.video_output)
-        else:
-            os.replace(args.video_output, output)
+    if args.audios:
+        write_video_with_audio()
+        if os.path.isfile(args.audio_output):
+            os.remove(args.audio_output)
+        os.remove(args.video_output)
+    else:
+        os.replace(args.video_output, output)
 
 def write_video_reencode():
     for l in labels.labels:
@@ -68,7 +67,7 @@ def write_video_reencode():
         *(['-tune', 'film'] if args.output_quality == 'high' else []),
         '-f', 'matroska',
         '-y',
-        args.video_output if args.output != '-' else '-'
+        args.video_output
         ],
         check=True
     )
@@ -83,7 +82,8 @@ def write_video_increment():
         '-i', 'pipe:',
         '-c', 'copy',
         '-an',
-        '-y', args.video_output
+        '-y',
+        args.video_output
         ],
         stdin=subprocess.PIPE,
         stderr=subprocess.PIPE
@@ -112,7 +112,8 @@ def write_video_mixed_reencode():
         )) + [
         '-filter_complex', 'concat=n=%d' % len(labels.labels),
         '-an',
-        '-y', args.video_output
+        '-y',
+        args.video_output
         ],
         check=True
     )
@@ -133,7 +134,8 @@ def write_video_mixed_increment(labels_before):
         '-i', 'pipe:',
         '-c', 'copy',
         '-an',
-        '-y', args.video_output
+        '-y',
+        args.video_output
         ],
         stdin=subprocess.PIPE,
         stderr=subprocess.PIPE
@@ -176,29 +178,22 @@ def write_video_with_audio():
             labels.labels[-1].output_final_point),
         '-i', args.audio_output,
         '-c', 'copy',
-        '-y', output
+        *(['-f', args.output_format] if args.output_format else []),
+        '-y',
+        args.output if validators.url(args.output) else output
         ],
         check=True
     )
 
 def play_video():
-    sys.argv.remove('--play')
-    if args.loop:
-        sys.argv.remove('--loop')
-    if not args.audios:
-        sys.argv.extend(['--audios', 'any'])
-    if not args.videos:
-        sys.argv.extend(['--videos', 'any'])
-        sys.argv.extend(['--videos-max-number', str(1)])
-    sys.argv.extend(['--output-quality', 'low'])
+    play_video_prepare()
     video = '%d.' + output
     delay = args.output_max_length if args.output_max_length else 60
     tasks = int(args.time / delay) if args.loop else 1
-    play_video_prepare()
     command = (
         'bash -c "' \
             'mpv ' +
-                ('--input-conf=\'%s\' ' % ('.' + output + '.conf')
+                ('--input-conf=\'%s\' ' % player_config
                     if args.input and args.input_labels else '') +
                 '--fs ' + ' '.join(
                 '--{ <( ' \
@@ -245,22 +240,42 @@ def play_video():
     play_video_cleanup()
 
 def play_video_prepare():
+    play_video_prepare_args()
     if args.input_labels:
-        func = inspect.getsource(update_labels_filter).replace('\n', '\\n')
-        call = "update_labels_filter('%s', '%s', ${=time-pos})"
-        open('.' + output + '.conf', 'w').write(
+        play_video_prepare_edit()
+
+def play_video_prepare_args():
+    sys.argv.remove('--play')
+    if args.loop:
+        sys.argv.remove('--loop')
+    if not args.audios:
+        sys.argv.extend(['--audios', 'any'])
+    if not args.videos:
+        sys.argv.extend(['--videos', 'any'])
+        sys.argv.extend(['--videos-max-number', str(1)])
+    sys.argv.extend(['--output-quality', 'low'])
+
+def play_video_prepare_edit():
+    global player_config
+    player_config = '%s.input.conf' % output
+    global labels_backup
+    labels_backup = '%s.labels.txt' % output
+    func = inspect.getsource(update_labels_filter).replace('\n', '\\n')
+    call = "update_labels_filter('%s', '%s', ${=time-pos})"
+    with open(player_config, 'w') as f:
+        f.write(
             """
                 MBTN_LEFT_DBL run python -c \"%s\"
                 MBTN_RIGHT_DBL run python -c \"%s\"
                 MBTN_RIGHT ignore
             """ % (
                 func + call % (args.labels, args.input_labels),
-                func + call % ('.' + args.input_labels, args.input_labels)
+                func + call % (labels_backup, args.input_labels)
             )
         )
-        shutil.copyfile(args.input_labels, '.' + args.input_labels)
+    shutil.copyfile(args.input_labels, labels_backup)
 
 def play_video_cleanup():
     if args.input_labels:
-        os.remove('.' + output + '.conf')
-        os.remove('.' + args.input_labels)
+        os.remove(player_config)
+        os.remove(labels_backup)

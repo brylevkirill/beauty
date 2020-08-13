@@ -49,32 +49,37 @@ def update_labels_filter(source, target, timestamp):
     ts = datetime.datetime.utcfromtimestamp(timestamp)
     t = ts.strftime('%H:%M:%S.%f')[:-3]
     lines = []
-    lines.extend(
-        s for s in open(target).readlines()
-        if s.split()[1] <= t
-    )
-    lines.extend(
-        (s[:s.rindex('\t')] + s[-1])
-        for s in open(source).readlines()
-        if s.split()[0] <= t and t < s.split()[1]
-    )
-    lines.extend(
-        s for s in open(target).readlines()
-        if t < s.split()[0]
-    )
-    open(target, 'w').writelines(lines)
+    with open(target) as f:
+        lines.extend(
+            s for s in f.readlines()
+            if s.split()[1] <= t
+        )
+    with open(source) as f:
+        lines.extend(
+            (s[:s.rindex('\t')] + s[-1]) for s in f.readlines()
+            if s.split()[0] <= t and t < s.split()[1]
+        )
+    with open(target) as f:
+        lines.extend(
+            s for s in f.readlines()
+            if t < s.split()[0]
+        )
+    with open(target, 'w') as f:
+        f.writelines(lines)
 
 def read_labels(custom_file_name=None):
     file_name = args.labels if custom_file_name is None else custom_file_name
-    labels[:] = [
-        parse_label(s) for s in open(file_name).read().splitlines()
-        ] if os.path.isfile(file_name) else []
+    with open(file_name) as f:
+        labels[:] = [parse_label(s) for s in f.read().splitlines()]
 
 def write_labels(custom_file_name=None, custom_labels=None):
     file_name = args.labels if custom_file_name is None else custom_file_name
-    open(file_name, 'w').writelines(
-        format_label(l) for l in (
-            labels if custom_labels is None else custom_labels))
+    with open(file_name, 'w') as f:
+        f.writelines(
+            format_label(l) for l in (
+                labels if custom_labels is None else custom_labels
+            )
+        )
     if args.subtitles:
         write_subtitles(args.subtitles_output % output)
 
@@ -108,27 +113,28 @@ def format_label(l: Label):
     )
 
 def read_subtitles(file_name):
-    return [
-        Label(
-            output_start_point = parse_timestamp(t[0]),
-            output_final_point = parse_timestamp(t[1])
-        )
-        for t in (
-            s.split(' --> ') for s in
-            open(file_name).read().splitlines()
-        )
-        if t[1:]
-        ] if os.path.isfile(file_name) else []
+    with open(file_name) as f:
+        return [
+            Label(
+                output_start_point = parse_timestamp(t[0]),
+                output_final_point = parse_timestamp(t[1])
+            )
+            for t in (
+                s.split(' --> ') for s in f.read().splitlines()
+            )
+            if t[1:]
+            ]
 
 def write_subtitles(file_name):
-    open(file_name, 'w').writelines(
-        '%d\n%s --> %s\n%d\n\n' % (
-            i + 1,
-            format_timestamps(labels[i].output_start_point),
-            format_timestamps(labels[i].output_final_point),
-            i + 1)
-        for i in range(len(labels))
-    )
+    with open(file_name, 'w') as f:
+        f.writelines(
+            '%d\n%s --> %s\n%d\n\n' % (
+                i + 1,
+                format_timestamps(labels[i].output_start_point),
+                format_timestamps(labels[i].output_final_point),
+                i + 1)
+            for i in range(len(labels))
+        )
 
 def parse_timestamps(s):
     ts = [parse_timestamp(t) for t in s.split(',')]
