@@ -27,7 +27,8 @@ def youtube_collections(items, type):
                     if args.labels_public:
                         item = 'labeled'
                     else:
-                        item = random.sample(collections.keys(), 1)[0]
+                        item = random.sample(
+                            list(collections.keys())[:-1], 1)[0]
                 if item in collections:
                     if type == 'audio':
                         ids = random.sample(collections[item], 1)

@@ -37,7 +37,8 @@ arg('-a', '--audios', type=str, nargs='+', default=[],
 arg('-v', '--videos', type=str, nargs='+', default=[],
     metavar='(%s | "any"|"flowers"|"nightsky"|"girls"|"girls2")' % opt)
 arg('-i', '--images', type=str, nargs='+', default=[])
-arg('-o', '--output', type=str, metavar='<file> | "-" (stdout)')
+arg('-o', '--output', type=str,
+    metavar='(<file> | <live stream URL> | "-" (stdout))')
 
 arg('-l', '--labels', type=str, metavar='<labels file>')
 arg('--labels-reinit')
@@ -61,9 +62,8 @@ arg('--increment')
 
 arg('--videos-max-number', type=int)
 arg('--output-max-length', type=float)
-arg('--output-format', type=str, default='mp4')
-arg('--output-quality', type=str,
-    choices=['high', 'medium', 'low'], default='medium')
+arg('--output-format', type=str)
+arg('--output-quality', type=str, choices=['high', 'medium', 'low'])
 
 arg('--labels-min-length', type=float, default=0.2)
 arg('--labels-max-length', type=float)
@@ -74,8 +74,8 @@ arg('--labels-from-chords-chroma')
 arg('--labels-from-chords-cnn')
 arg('--labels-from-beats')
 arg('--labels-from-beats-detection')
-arg('--labels-from-beats-tracking')
 arg('--labels-from-beats-detection-crf')
+arg('--labels-from-beats-tracking')
 arg('--labels-from-beats-tracking-dbn')
 arg('--labels-from-notes')
 arg('--labels-from-notes-rnn')
@@ -100,9 +100,9 @@ arg('--visual-effect-zooming')
 arg('--loglevel', type=str,
     choices=['repeat+level+warning', 'repeat+level+verbose'],
     default='repeat+level+warning')
-arg('--video-output', type=str, default='%s.video')
-arg('--audio-output', type=str, default='%s.audio')
-arg('--cache', metavar='<cache files>', type=str, default='cache.%s.%s')
+arg('--video-output', type=str, default='video.%s.%s')
+arg('--audio-output', type=str, default='audio.%s.%s')
+arg('--cache', metavar='<cache files>', type=str)
 arg('--subtitles-output', type=str, default='%s.srt')
 arg('--offset-reencode', type=float, default=-0.0415)
 arg('--offset-increment', type=float, default=-0.0245)
@@ -110,18 +110,21 @@ arg('--offset-mixed', type=float, default=-0.045)
 
 args = parser.parse_args()
 
+output_stream = bool(urllib.parse.urlparse(args.output).scheme)
+if not args.output_format:
+    args.output_format = 'flv' if output_stream or args.play else 'mp4'
 output = (
-    'output.%s.%s' % (uuid.uuid1(), args.output_format)
-    if not args.output or args.output == '-' or
-        urllib.parse.urlparse(args.output).scheme
+    'output.%s' % uuid.uuid1()
+    if not args.output or args.output == '-' or output_stream
     else args.output
 )
-args.video_output = args.video_output % output + '.' + args.output_format
-args.audio_output = args.audio_output % output + '.m4a'
+args.labels = output + '.txt' if not args.labels else args.labels
+args.video_output = args.video_output % (output, args.output_format)
+args.audio_output = args.audio_output % (output, 'm4a')
+args.cache = 'cache.' + output + '.%s.' + args.output_format
+output += '.' + args.output_format
 if not args.labels or not os.path.isfile(args.labels):
     args.labels_reinit = True
-if not args.labels:
-    args.labels = output + '.txt'
 if not args.reencode and not args.increment:
     args.reencode = True
 args.visual_effect = (

@@ -33,7 +33,6 @@ def write_video(labels_before):
             os.replace(args.video_output, output)
 
 def write_video_reencode():
-    stream_output = urllib.parse.urlparse(args.output).scheme
     for l in labels.labels:
         if l.input_url not in videos.videos:
             read_video(l.input_url)
@@ -67,10 +66,10 @@ def write_video_reencode():
         *(['-preset', 'slow'] if args.output_quality == 'high' else
             ['-preset', 'fast'] if args.output_quality == 'low' else []),
         *(['-tune', 'film'] if args.output_quality == 'high' else []),
-        '-f', args.output_format,
+        *(['-f', args.output_format] if args.output_format else []),
         '-c:a', 'copy',
         '-y',
-        args.output if stream_output else args.video_output
+        args.output if args.output else output
         ],
         check=True
     )
@@ -92,10 +91,7 @@ def write_video_increment():
         stderr=subprocess.PIPE
     )
     process.stdin.writelines(
-        ('file \'%s\'\n' % args.cache % (
-            i + 1,
-            args.output_format
-        )).encode()
+        ('file \'%s\'\n' % args.cache % (i + 1)).encode()
         for i in range(len(labels.labels))
     )
     _, errors = process.communicate()
@@ -113,10 +109,8 @@ def write_video_mixed_reencode():
         'ffmpeg',
         '-loglevel', args.loglevel] +
         list(itertools.chain.from_iterable([
-            '-i', args.cache % (
-                i + 1,
-                args.output_format
-            )] for i in range(len(labels.labels))
+            '-i', args.cache % (i + 1)
+            ] for i in range(len(labels.labels))
         )) + [
         '-filter_complex', 'concat=n=%d' % len(labels.labels),
         '-an',
@@ -164,11 +158,8 @@ def write_video_mixed_increment(labels_before):
                 )
                 i0 = -1
             if i < len(labels.labels):
-                process.stdin.write((
-                    'file \'%s\'\n' % args.cache % (
-                        i + 1,
-                        args.output_format
-                    )).encode()
+                process.stdin.write(
+                    ('file \'%s\'\n' % args.cache % (i + 1)).encode()
                 )
         else:
             if i0 == -1:
@@ -178,7 +169,6 @@ def write_video_mixed_increment(labels_before):
         raise Exception(errors)
 
 def write_video_with_audio():
-    stream_output = urllib.parse.urlparse(args.output).scheme
     subprocess.run([
         'ffmpeg',
         '-loglevel', args.loglevel,
@@ -191,7 +181,7 @@ def write_video_with_audio():
         '-c', 'copy',
         '-f', args.output_format,
         '-y',
-        args.output if stream_output else output
+        args.output if args.output else output
         ],
         check=True
     )
@@ -201,6 +191,7 @@ def play_video():
     video = '%d.' + output
     delay = args.output_max_length if args.output_max_length else 60
     tasks = int(args.time / delay) if args.loop else 1
+    global player_config
     command = (
         'bash -c "' \
             'mpv ' +
@@ -210,11 +201,8 @@ def play_video():
                 '--{ <( ' \
                     'sleep %d; ' \
                     'timeout --foreground %f ' \
-                        'parallel --semaphore -j %d --fg %s; ' \
-                    'cat %s; ' \
-                    'rm -f %s ' \
+                         'parallel --semaphore -j %d --fg --ungroup %s ' \
                     ') ' \
-                    '--stream-buffer-size=16MiB ' \
                     '%s' \
                     '%s' \
                 '--} ' % (
@@ -226,16 +214,9 @@ def play_video():
                             replace('(', '\\(').
                             replace(')', '\\)').
                             replace('&', '\\&')
-                        for arg in sys.argv + [
-                            '--output',
-                            args.output if args.output else video % i
-                        ]
+                        for arg in sys.argv + ['--output', '-']
                     )),
-                    args.output if args.output else video % i,
-                    (args.output if args.output else video % i)
-                        if not args.keep else '',
-                    '--sub-file=\'%s\' ' % args.subtitles_output %
-                        (args.output if args.output else video % i)
+                    '--sub-file=\'%s\' ' % args.subtitles_output % output
                         if args.subtitles else '',
                     '--lavfi-complex=\'' \
                         '[vid2]scale=iw/2:ih/2[v],' \
@@ -257,14 +238,15 @@ def play_video_prepare():
 
 def play_video_prepare_args():
     sys.argv.remove('--play')
-    if args.loop:
-        sys.argv.remove('--loop')
     if not args.audios:
         sys.argv.extend(['--audios', 'any'])
     if not args.videos:
         sys.argv.extend(['--videos', 'any'])
         sys.argv.extend(['--videos-max-number', str(1)])
-    sys.argv.extend(['--output-quality', 'low'])
+    if not args.output_quality:
+        sys.argv.extend(['--output-quality', 'low'])
+    if args.output_format and '--output-format' not in sys.argv:
+        sys.argv.extend(['--output-format', args.output_format])
 
 def play_video_prepare_edit():
     global player_config
@@ -288,5 +270,7 @@ def play_video_prepare_edit():
 
 def play_video_cleanup():
     if args.input_labels:
+        global player_config
         os.remove(player_config)
+        global labels_backup
         os.remove(labels_backup)

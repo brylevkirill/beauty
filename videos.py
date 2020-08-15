@@ -70,11 +70,13 @@ def read_video(video_url, strict=True):
     if (validators.url(video_url) and
         'youtube.com' in video_url or 'youtu.be' in video_url):
         v = youtube_video(video_url, strict=strict)
-        if v is not None:
-            videos[video_url] = Video(
-                url=v[0],
-                duration=v[1]
-            )
+        if not v:
+            assert not strict
+            return None
+        videos[video_url] = Video(
+            url=v[0],
+            duration=v[1]
+        )
     else:
         videos[video_url] = Video(
             url=video_url,

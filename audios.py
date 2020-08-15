@@ -110,8 +110,8 @@ def create_labels():
         args.labels_from_chords_cnn):
         args.labels_from_chords = True
     if (args.labels_from_beats_detection or
-        args.labels_from_beats_tracking or
         args.labels_from_beats_detection_crf or
+        args.labels_from_beats_tracking or
         args.labels_from_beats_tracking_dbn):
         args.labels_from_beats = True
     if (args.labels_from_notes_rnn or
@@ -120,7 +120,7 @@ def create_labels():
     if (not args.labels_from_chords and
        not args.labels_from_beats and
        not args.labels_from_notes):
-        args.labels_from_chords = True
+        args.labels_from_beats = True
     L = sorted(set([
         0,
         *(labels_from_chords(args.audio_output)
@@ -192,23 +192,24 @@ def labels_from_chords(audio_file_name):
 
 def labels_from_beats(audio_file_name):
     if (not args.labels_from_beats_detection and
-        not args.labels_from_beats_tracking and
         not args.labels_from_beats_detection_crf and
+        not args.labels_from_beats_tracking and
         not args.labels_from_beats_tracking_dbn):
-        args.labels_from_beats_tracking_dbn = True
+        args.labels_from_beats_tracking = True
+        args.labels_joins = 4
     proc = []
     if args.labels_from_beats_detection:
         proc.append(madmom.features.beats.BeatDetectionProcessor(
-            fps=100
-        ))
-    if args.labels_from_beats_tracking:
-        proc.append(madmom.features.beats.BeatTrackingProcessor(
             fps=100
         ))
     if args.labels_from_beats_detection_crf:
         proc.append(madmom.features.beats.CRFBeatDetectionProcessor(
             min_bpm=50,
             max_bpm=100,
+            fps=100
+        ))
+    if args.labels_from_beats_tracking:
+        proc.append(madmom.features.beats.BeatTrackingProcessor(
             fps=100
         ))
     if args.labels_from_beats_tracking_dbn:
