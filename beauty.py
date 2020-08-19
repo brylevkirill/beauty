@@ -37,7 +37,7 @@ arg('-a', '--audios', type=str, nargs='+', default=[],
 arg('-v', '--videos', type=str, nargs='+', default=[],
     metavar='(%s | "any"|"flowers"|"nightsky"|"girls"|"girls2")' % opt)
 arg('-i', '--images', type=str, nargs='+', default=[])
-arg('-o', '--output', type=str,
+arg('-o', '--output', type=str, nargs='*', default=[],
     metavar='(<file> | <live stream URL> | "-" (stdout))')
 
 arg('-l', '--labels', type=str, metavar='<labels file>')
@@ -98,7 +98,7 @@ arg('--visual-effect-speedup-tempo-multi', type=float, default=1)
 arg('--visual-effect-zooming')
 
 arg('--loglevel', type=str,
-    choices=['repeat+level+warning', 'repeat+level+verbose'],
+    choices=['quiet', 'repeat+level+warning', 'repeat+level+verbose'],
     default='repeat+level+warning')
 arg('--video-output', type=str, default='video.%s.%s')
 arg('--audio-output', type=str, default='audio.%s.%s')
@@ -110,14 +110,12 @@ arg('--offset-mixed', type=float, default=-0.045)
 
 args = parser.parse_args()
 
-output_stream = bool(urllib.parse.urlparse(args.output).scheme)
+output = 'output.%s' % uuid.uuid1()
 if not args.output_format:
-    args.output_format = 'flv' if output_stream or args.play else 'mp4'
-output = (
-    'output.%s' % uuid.uuid1()
-    if not args.output or args.output == '-' or output_stream
-    else args.output
-)
+    stream_output = any(
+        bool(urllib.parse.urlparse(output).scheme) for output in args.output
+    )
+    args.output_format = 'flv' if stream_output or args.play else 'mp4'
 args.labels = output + '.txt' if not args.labels else args.labels
 args.video_output = args.video_output % (output, args.output_format)
 args.audio_output = args.audio_output % (output, 'm4a')

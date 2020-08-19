@@ -25,8 +25,9 @@ def visual_filter(label: Label, video):
 def visual_filter_base(label: Label, video, filter_expr, filter_func):
     process = subprocess.run([
         'ffmpeg',
+        '-loglevel', args.loglevel,
         '-ss', str(label.input_start_point),
-        '-t', str(label.input_final_point - label.input_start_point),
+        '-to', str(label.input_final_point),
         '-i', video,
         '-vf', filter_expr,
         '-f', 'null',

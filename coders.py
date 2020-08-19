@@ -54,22 +54,31 @@ def write_video_reencode():
                 args.offset_reencode),
             '-i', videos.videos[l.input_url].url
             ] for l in labels.labels
-                   )) + [
+            )) + [
         '-t', str(args.output_max_length or
             labels.labels[-1].output_final_point),
         '-i', args.audio_output,
-        '-filter_complex', ', '.join([concat_filter] + effects_filters),
+        '-filter_complex',
+            ', '.join([concat_filter] + effects_filters) + '[fv]',
+        '-map', '[fv]',
+        '-map', '%d:a' % len(labels.labels),
         '-shortest',
+        '-vsync', '2',
+        '-flags', '+global_header',
         '-c:v', 'libx264',
         *(['-crf', '17'] if args.output_quality == 'high' else
             ['-crf', '33'] if args.output_quality == 'low' else []),
         *(['-preset', 'slow'] if args.output_quality == 'high' else
             ['-preset', 'fast'] if args.output_quality == 'low' else []),
         *(['-tune', 'film'] if args.output_quality == 'high' else []),
-        *(['-f', args.output_format] if args.output_format else []),
-        '-c:a', 'copy',
-        '-y',
-        args.output if args.output else output
+        '-c:a', 'libmp3lame',
+        '-f', 'tee',
+        '|'.join(
+            ('[f=%s]' % args.output_format if args.output_format else '') +
+            (target if target != '-' else 'pipe:1')
+            for target in (args.output if args.output else [output])
+        ),
+        '-y'
         ],
         check=True
     )
@@ -181,7 +190,7 @@ def write_video_with_audio():
         '-c', 'copy',
         '-f', args.output_format,
         '-y',
-        args.output if args.output else output
+        args.output[0] if args.output else output
         ],
         check=True
     )
@@ -214,7 +223,8 @@ def play_video():
                             replace('(', '\\(').
                             replace(')', '\\)').
                             replace('&', '\\&')
-                        for arg in sys.argv + ['--output', '-']
+                        for arg in sys.argv + ['--output', '-'] +
+                            [target for target in args.output if target != '-']
                     )),
                     '--sub-file=\'%s\' ' % args.subtitles_output % output
                         if args.subtitles else '',
@@ -242,7 +252,7 @@ def play_video_prepare_args():
         sys.argv.extend(['--audios', 'any'])
     if not args.videos:
         sys.argv.extend(['--videos', 'any'])
-        sys.argv.extend(['--videos-max-number', str(1)])
+        sys.argv.extend(['--videos-max-number', '1'])
     if not args.output_quality:
         sys.argv.extend(['--output-quality', 'low'])
     if args.output_format and '--output-format' not in sys.argv:

@@ -62,9 +62,7 @@ def read_videos():
     result = [pool.apply_async(read_video, (v, False)) for v in args.videos]
     pool.close()
     pool.join()
-    assert all(r.get() is not None for r in result)
-    if not all (v in videos for v in args.videos):
-        raise Exception('Not all videos have been read.')
+    [r.get() for r in result]
 
 def read_video(video_url, strict=True):
     if (validators.url(video_url) and

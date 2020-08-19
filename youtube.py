@@ -16,7 +16,7 @@ def youtube_collections(items, type):
                 else:
                     items.append('orchestral')
             elif type == 'video':
-                items[:] = random.sample(list(collections.values()), 1)[0]
+                items[:] = random.sample(list(collections.values()[:-2]), 1)[0]
                 if items[0][0:2] == 'PL':
                     items[0] = youtube_playlist_url(items[0])
             youtube_collections(items, type)
@@ -24,11 +24,11 @@ def youtube_collections(items, type):
             for item in list(items):
                 if item == 'any':
                     items.remove(item)
-                    if args.labels_public:
-                        item = 'labeled'
-                    else:
-                        item = random.sample(
-                            list(collections.keys())[:-1], 1)[0]
+                    if type == 'audio':
+                        item = ('labeled' if args.labels_public else
+                            random.sample(list(collections.keys())[:-1], 1)[0])
+                    elif type == 'video':
+                        item = random.sample(list(collections.keys()), 1)[0]
                 if item in collections:
                     if type == 'audio':
                         ids = random.sample(collections[item], 1)

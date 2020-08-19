@@ -5,6 +5,7 @@ import madmom.features.beats
 import madmom.features.chords
 import madmom.features.notes
 import os
+import pydub
 import random
 import shutil
 import subprocess
@@ -32,6 +33,9 @@ def duration(audio_url):
     return property(audio_url, 'a:0', 'duration')
 
 def tempo(audio_file_name):
+    return tempo_from_chords(audio_file_name)
+
+def tempo_from_chords(audio_file_name):
     proc = madmom.features.chords.DeepChromaChordRecognitionProcessor()
     feat = madmom.audio.chroma.DeepChromaProcessor()(audio_file_name)
     intervals = [
@@ -40,11 +44,14 @@ def tempo(audio_file_name):
     ]
     return collections.Counter(intervals).most_common(1)[0][0]
 
+def tempo_from_beats(audio_file_name):
+    pass
+
 def read_audios():
     youtube_collections(args.audios, 'audio')
     youtube_playlists(args.audios)
     if not args.audios:
-        return
+        return []
     while True:
         audio = random.sample(args.audios, 1)[0]
         if not validators.url(audio):
@@ -77,7 +84,7 @@ def read_audio(audio):
             '--audio-format', 'm4a',
             audio,
             '-o',
-            args.audio_output[:-4] + '.mp4'
+            args.audio_output
             ],
             check=True,
             stderr=subprocess.PIPE
@@ -91,12 +98,24 @@ def read_audio(audio):
             return False
         else:
             raise e
-    if args.output_max_length:
-        output = args.audio_output + '.edit.m4a'
+    sound = pydub.AudioSegment.from_file(args.audio_output)
+    chunks = pydub.silence.detect_nonsilent(
+        sound,
+        min_silence_len=500,
+        silence_thresh=-50)
+    assert chunks
+    start, final = chunks[0]
+    start, final, total = start / 1000, final / 1000, len(sound) / 1000
+    final = args.output_max_length if (
+        args.output_max_length and
+        args.output_max_length < final) else final
+    if start != 0 or final != total:
+        output = '.' + args.audio_output
         process = subprocess.run([
             'ffmpeg',
             '-loglevel', args.loglevel,
-            '-t', str(args.output_max_length),
+            '-ss', str(start),
+            '-to', str(final),
             '-i', args.audio_output,
             output
             ],
@@ -120,6 +139,7 @@ def create_labels():
     if (not args.labels_from_chords and
        not args.labels_from_beats and
        not args.labels_from_notes):
+        args.labels_from_chords = True
         args.labels_from_beats = True
     L = sorted(set([
         0,
