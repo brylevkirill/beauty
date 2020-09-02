@@ -14,7 +14,7 @@ def youtube_collections(items, type):
                 if args.labels_public:
                     items.append('labeled')
                 else:
-                    items.append('orchestral')
+                    items.append(next(iter(collections)))
             elif type == 'video':
                 items[:] = random.sample(list(collections.values()[:-2]), 1)[0]
                 if items[0][0:2] == 'PL':

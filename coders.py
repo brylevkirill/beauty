@@ -216,7 +216,7 @@ def play_video():
                     '%s' \
                 '--} ' % (
                     max((i - 0.5) * delay, 0),
-                    args.queue * delay if not args.wait else 0,
+                    args.queue * delay if args.nowait else 0,
                     args.queue,
                     'python \\\'%s\\\'' % ('\\\' \\\''.join(
                         arg.replace(' ', '\\ ').

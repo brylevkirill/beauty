@@ -9,6 +9,7 @@ import pydub
 import random
 import shutil
 import subprocess
+import tempfile
 import validators
 
 from beauty import args
@@ -45,7 +46,7 @@ def tempo_from_chords(audio_file_name):
     return collections.Counter(intervals).most_common(1)[0][0]
 
 def tempo_from_beats(audio_file_name):
-    pass
+    ...
 
 def read_audios():
     youtube_collections(args.audios, 'audio')
@@ -73,22 +74,28 @@ def read_audios():
                         break
     return [audio]
 
-def read_audio(audio):
-    if os.path.isfile(args.audio_output):
-        os.remove(args.audio_output)
+def read_audio(media_url):
+    if not fetch_audio(media_url, args.audio_output):
+        return False
+    shape_audio(args.audio_output, length=args.output_max_length)
+    return True
+
+def fetch_audio(media_url, audio_file_name):
     try:
         process = subprocess.run([
             'youtube-dl',
             '--quiet',
+            '--no-continue',
             '--extract-audio',
             '--audio-format', 'm4a',
-            audio,
+            media_url,
             '-o',
-            args.audio_output
+            audio_file_name
             ],
             check=True,
             stderr=subprocess.PIPE
         )
+        return True
     except subprocess.CalledProcessError as e:
         if any (m in e.stderr.decode() for m in [
             'This video is unavailable',
@@ -98,7 +105,9 @@ def read_audio(audio):
             return False
         else:
             raise e
-    sound = pydub.AudioSegment.from_file(args.audio_output)
+
+def shape_audio(audio_file_name, length=None):
+    sound = pydub.AudioSegment.from_file(audio_file_name)
     chunks = pydub.silence.detect_nonsilent(
         sound,
         min_silence_len=500,
@@ -106,23 +115,21 @@ def read_audio(audio):
     assert chunks
     start, final = chunks[0]
     start, final, total = start / 1000, final / 1000, len(sound) / 1000
-    final = args.output_max_length if (
-        args.output_max_length and
-        args.output_max_length < final) else final
+    final = length if length and length < final else final
     if start != 0 or final != total:
-        output = '.' + args.audio_output
+        _, temp_file_name = tempfile.mkstemp(suffix='.m4a')
         process = subprocess.run([
             'ffmpeg',
             '-loglevel', args.loglevel,
             '-ss', str(start),
             '-to', str(final),
-            '-i', args.audio_output,
-            output
+            '-i', audio_file_name,
+            '-y',
+            temp_file_name
             ],
             check=True
         )
-        os.replace(output, args.audio_output)
-    return True
+        os.replace(temp_file_name, audio_file_name)
 
 def create_labels():
     if (args.labels_from_chords_chroma or

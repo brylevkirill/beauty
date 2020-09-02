@@ -32,11 +32,11 @@ def arg(*args, **kwargs):
     parser.add_argument(*args, **kwargs)
 
 opt = '<file|URL> | <YT playlist URL> | "ytsearch"[""|<N>|"all"]":"<query>'
-arg('-a', '--audios', type=str, nargs='+', default=[],
+arg('-a', '--audios', type=str, nargs='*', default=['orchestral'],
     metavar='(%s | "any"|"orchestral"|"electronic"|"labeled")' % opt)
-arg('-v', '--videos', type=str, nargs='+', default=[],
+arg('-v', '--videos', type=str, nargs='*', default=['flowers'],
     metavar='(%s | "any"|"flowers"|"nightsky"|"girls"|"girls2")' % opt)
-arg('-i', '--images', type=str, nargs='+', default=[])
+arg('-i', '--images', type=str, nargs='*', default=[])
 arg('-o', '--output', type=str, nargs='*', default=[],
     metavar='(<file> | <live stream URL> | "-" (stdout))')
 
@@ -49,9 +49,9 @@ arg('--labels-source-reinit')
 arg('-p', '--play')
 arg('-k', '--keep')
 arg('-x', '--loop')
-arg('-t', '--time', type=float, default=600)
+arg('-t', '--time', type=float, default=3600)
 arg('-q', '--queue', type=int, default=2)
-arg('-w', '--wait')
+arg('-n', '--nowait')
 arg('-s', '--subtitles')
 
 arg('--input', type=str, metavar='<file>')
