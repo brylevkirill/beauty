@@ -10,30 +10,18 @@ from labels import parse_timestamp, read_subtitles
 def youtube_collections(items, type):
     def process(items, collections):
         if not items:
-            if type == 'audio':
-                if args.labels_public:
-                    items.append('labeled')
-                else:
-                    items.append(next(iter(collections)))
-            elif type == 'video':
-                items[:] = random.sample(list(collections.values()[:-2]), 1)[0]
-                if items[0][0:2] == 'PL':
-                    items[0] = youtube_playlist_url(items[0])
+            items[:] = random.sample(list(collections.values()), 1)[0]
+            if items[0][0:2] == 'PL':
+                items[0] = youtube_playlist_url(items[0])
             youtube_collections(items, type)
         else:
             for item in list(items):
                 if item == 'any':
                     items.remove(item)
-                    if type == 'audio':
-                        item = ('labeled' if args.labels_public else
-                            random.sample(list(collections.keys())[:-1], 1)[0])
-                    elif type == 'video':
-                        item = random.sample(list(collections.keys()), 1)[0]
+                    item = random.sample(list(collections.keys()), 1)[0]
                 if item in collections:
                     if type == 'audio':
                         ids = random.sample(collections[item], 1)
-                        if item == 'labeled':
-                            args.labels_public = True
                     elif type == 'video':
                         ids = collections[item]
                     for id in ids:
@@ -133,7 +121,7 @@ def youtube_video(
     except subprocess.CalledProcessError as e:
         if not strict:
             if any (m in e.stderr.decode() for m in [
-                'This video is unavailable',
+                'This video',
                 'requested format not available',
                 'YouTube said:'
             ]):

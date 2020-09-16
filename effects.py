@@ -70,3 +70,4 @@ def visual_effects_speedup_custom():
 
 def visual_effects_zooming():
     return '', lambda x: x
+    ...

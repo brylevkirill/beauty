@@ -20,7 +20,7 @@ def property(media_url, stream, prop):
     process = subprocess.run([
         'ffprobe',
         '-select_streams', stream,
-        '-show_entries', 'stream=%s' % prop,
+        '-show_entries', 'format=%s' % prop,
         '-of', 'default=noprint_wrappers=1:nokey=1',
         '-v', 'quiet',
         media_url
@@ -98,8 +98,7 @@ def fetch_audio(media_url, audio_file_name):
         return True
     except subprocess.CalledProcessError as e:
         if any (m in e.stderr.decode() for m in [
-            'This video is unavailable',
-            'This video has been removed',
+            'This video',
             'YouTube said:'
         ]):
             return False
@@ -257,7 +256,7 @@ def labels_from_notes(audio_file_name):
     proc = []
     act = []
     if args.labels_from_notes_rnn:
-        proc.append(madmom.features.notes.NoteOnsetPeakPickingProcessor(
+        proc.append(madmom.features.notes.NotePeakPickingProcessor(
             fps=100,
             pitch_offset=21
         ))

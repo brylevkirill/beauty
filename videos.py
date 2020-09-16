@@ -23,7 +23,7 @@ def property(media_url, stream, prop):
     process = subprocess.run([
         'ffprobe',
         '-select_streams', stream,
-        '-show_entries', 'stream=%s' % prop,
+        '-show_entries', 'format=%s' % prop,
         '-of', 'default=noprint_wrappers=1:nokey=1',
         '-v', 'quiet',
         media_url
@@ -259,7 +259,6 @@ def cache_input(l: Label, n):
         '-t', str(l.input_final_point - l.input_start_point +
             args.offset_increment),
         '-i', videos[l.input_url].url,
-        '-filter_complex', 'concat=n=1',
         '-an',
         '-y', args.cache % (n + 1)
         ],

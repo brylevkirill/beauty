@@ -1,4 +1,5 @@
 import argparse
+import multiprocessing
 import os
 import random
 import shutil
@@ -14,8 +15,9 @@ import uuid
 # - creating labels (video) (analyzing video track)
 # - applying visual filters
 # - applying visual effects
-# - encoding/writing videos (reencoding/incrementing)
-# - playing created videos (during encoding/writing)
+# - encoding/writing videos (reencoding/incremental)
+# - streaming created videos (video generation queue)
+# - playing created videos (video generation queue)
 # - editing created videos (picture-in-picture mode)
 
 # sample videos:
@@ -51,6 +53,7 @@ arg('-k', '--keep')
 arg('-x', '--loop')
 arg('-t', '--time', type=float, default=3600)
 arg('-q', '--queue', type=int, default=2)
+arg('-d', '--delay', type=float, default=0.333)
 arg('-n', '--nowait')
 arg('-s', '--subtitles')
 
@@ -119,20 +122,17 @@ if not args.output_format:
 args.labels = output + '.txt' if not args.labels else args.labels
 args.video_output = args.video_output % (output, args.output_format)
 args.audio_output = args.audio_output % (output, 'm4a')
-args.cache = 'cache.' + output + '.%s.' + args.output_format
+args.cache = 'video.' + output + '.%s.' + args.output_format
 output += '.' + args.output_format
 if not args.labels or not os.path.isfile(args.labels):
     args.labels_reinit = True
 if not args.reencode and not args.increment:
-    args.reencode = True
+    args.increment = True
 args.visual_effect = (
     args.visual_effect_speedup or
     args.visual_effect_zooming)
 
 if __name__== '__main__':
-    import multiprocessing
-    import random
-
     import labels
     import audios
     import videos

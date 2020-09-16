@@ -187,7 +187,8 @@ def write_video_with_audio():
         '-t', str(args.output_max_length or
             labels.labels[-1].output_final_point),
         '-i', args.audio_output,
-        '-c', 'copy',
+        '-c:v', 'copy',
+        '-c:a', 'libmp3lame',
         '-f', args.output_format,
         '-y',
         args.output[0] if args.output else output
@@ -215,7 +216,7 @@ def play_video():
                     '%s' \
                     '%s' \
                 '--} ' % (
-                    max((i - 0.5) * delay, 0),
+                    max((i - 1 + args.delay) * delay, 0),
                     args.queue * delay if args.nowait else 0,
                     args.queue,
                     'python \\\'%s\\\'' % ('\\\' \\\''.join(
