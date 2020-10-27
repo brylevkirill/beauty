@@ -259,6 +259,12 @@ def cache_input(l: Label, n):
         '-t', str(l.input_final_point - l.input_start_point +
             args.offset_increment),
         '-i', videos[l.input_url].url,
+        '-c:v', 'libx264',
+        *(['-crf', '17'] if args.output_quality == 'high' else
+            ['-crf', '33'] if args.output_quality == 'low' else []),
+        *(['-preset', 'slow'] if args.output_quality == 'high' else
+            ['-preset', 'fast'] if args.output_quality == 'low' else []),
+        *(['-tune', 'film'] if args.output_quality == 'high' else []),
         '-an',
         '-y', args.cache % (n + 1)
         ],

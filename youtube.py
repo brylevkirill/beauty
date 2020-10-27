@@ -57,7 +57,13 @@ def youtube_collections(items, type):
                 'HJaM5JtYYGw',
                 'CV2P-xsEiYE'
             ],
-            'nightsky': ['PL659KIPAkeqhsK80VGeiQ4g06mdYcJxt7'],
+            'nightsky': [
+                'L71nt62ddPk',
+                'aE2lFmRbs4Y',
+                'rSWqY5XOKcs',
+                'jQWSjB95TX8',
+                'MFRPJRcf2M4'
+            ],
             'girls': ['PL659KIPAkeqjaerr91OSBWPHRFbkY5jaD'],
             'girls2': ['PL659KIPAkeqhUkUJdGoqQg_hxHR8Y38z8']
         }

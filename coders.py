@@ -10,12 +10,12 @@ import urllib.parse
 import labels
 import videos
 from beauty import args, output
-from labels import update_labels_filter
+from labels import labels_created, update_labels_filter
 from videos import read_video
 from effects import visual_effects
 
 def write_video(labels_before):
-    if not labels.labels_created():
+    if not labels_created():
         return
     if args.reencode and args.increment:
         write_video_mixed(labels_before)
@@ -41,7 +41,7 @@ def write_video_reencode():
         for f in functions:
             y = f(y)
         return y
-    concat_filter = 'concat=n=%d' % len(labels.labels)
+    concat_filter = 'concat=n=%d:v=1:a=0' % len(labels.labels)
     effects_filters, effects_mappers = visual_effects()
     subprocess.run([
         'ffmpeg',
@@ -59,8 +59,8 @@ def write_video_reencode():
             labels.labels[-1].output_final_point),
         '-i', args.audio_output,
         '-filter_complex',
-            ', '.join([concat_filter] + effects_filters) + '[fv]',
-        '-map', '[fv]',
+            ', '.join([concat_filter] + effects_filters) + '[v]',
+        '-map', '[v]',
         '-map', '%d:a' % len(labels.labels),
         '-shortest',
         '-vsync', '2',
@@ -121,8 +121,7 @@ def write_video_mixed_reencode():
             '-i', args.cache % (i + 1)
             ] for i in range(len(labels.labels))
         )) + [
-        '-filter_complex', 'concat=n=%d' % len(labels.labels),
-        '-an',
+        '-filter_complex', 'concat=n=%d:v=1:a=0' % len(labels.labels),
         '-y',
         args.video_output
         ],
