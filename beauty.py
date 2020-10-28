@@ -71,7 +71,7 @@ def init_args():
 
     arg('--labels-min-length', type=float, default=0.2)
     arg('--labels-max-length', type=float)
-    arg('--labels-joins', type=int, default=1)
+    arg('--labels-joints', type=int, default=1)
     arg('--labels-splits', type=int, default=1)
     arg('--labels-from-chords')
     arg('--labels-from-chords-chroma')
@@ -86,6 +86,7 @@ def init_args():
     arg('--labels-from-notes-cnn')
 
     arg('--visual-filter-retries', type=int, default=5)
+    arg('--visual-filter-ordered')
     arg('--visual-filter-chrono')
     arg('--visual-filter-chrono-scope', type=float)
     arg('--visual-filter-chrono-speed', type=float)
@@ -96,9 +97,10 @@ def init_args():
     arg('--visual-filter-pace-prob', type=float, default=0.02)
     arg('--visual-filter-pace-rate', type=float, default=0.2)
     arg('--visual-filter-face', type=str, choices=['include', 'exclude'])
+    arg('--visual-filter-word', type=str, choices=['include', 'exclude'])
 
     arg('--visual-effect-speedup')
-    arg('--visual-effect-speedup-tempo-multi', type=float, default=1)
+    arg('--visual-effect-speedup-freq', type=float, default=1)
     arg('--visual-effect-zooming')
 
     arg('--loglevel', type=str,

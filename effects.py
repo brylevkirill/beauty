@@ -21,8 +21,7 @@ def visual_effects():
     return filters, mappers
 
 def visual_effects_speedup_cosine():
-    audio_tempo = (tempo(args.audio_output) *
-        args.visual_effect_speedup_tempo_multi)
+    interval = 60 / tempo(args.audio_output) / args.visual_effect_speedup_freq
     def f(x, p, y):
         x0 = x * p + math.pi / 2
         return (2 * (x0 - x0 % math.pi) / math.pi
@@ -31,7 +30,7 @@ def visual_effects_speedup_cosine():
         'ignore', 'The iteration is not making good progress')
     def fx(p, y):
         return f(math.pi / p, p, y)
-    p = scipy.optimize.fsolve(functools.partial(fx, y=audio_tempo), 1)[0]
+    p = scipy.optimize.fsolve(functools.partial(fx, y=interval), 1)[0]
     filter = 'setpts=\'' \
         '(2 * (T * %.3f + PI / 2 - mod(T * %.3f + PI / 2, PI)) / PI' \
         '- cos(mod(T * %.3f + PI / 2, PI))) / %.3f / TB\'' % tuple([p] * 4)

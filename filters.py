@@ -1,24 +1,28 @@
 import cv2
 import dlib
 import os
+import pytesseract
 import subprocess
+import sys
 import tempfile
 
 from beauty import args
 from labels import Label
 
 def visual_filter(label: Label, video):
-    if args.visual_filter_face:
-        if not visual_filter_face(label, video):
-            return False
-    if args.visual_filter_dark:
-        if not visual_filter_dark(label, video):
-            return False
-    if args.visual_filter_cuts:
-        if not visual_filter_cuts(label, video):
-            return False
-    if args.visual_filter_pace:
-        if not visual_filter_pace(label, video):
+    filters = [
+        visual_filter_dark,
+        visual_filter_cuts,
+        visual_filter_pace,
+        visual_filter_face,
+        visual_filter_word
+    ]
+    filters = [f for f in filters if getattr(args, f.__name__)]
+    if args.visual_filter_ordered:
+        filters.sort(key=lambda f:
+            sys.argv.index('--' + f.__name__.replace('_', '-')))
+    for f in filters:
+        if not f(label, video):
             return False
     return True
 
@@ -77,8 +81,8 @@ def visual_filter_pace(label: Label, video):
         filter_expr,
         filter_func)
 
-def visual_filter_face(label: Label, video):
-    _, frame_file_name = tempfile.mkstemp(suffix='.png')
+def frame(label: Label, video, color):
+    _, temp_file = tempfile.mkstemp(suffix='.png')
     process = subprocess.run([
         'ffmpeg',
         '-loglevel', args.loglevel,
@@ -86,13 +90,41 @@ def visual_filter_face(label: Label, video):
         '-i', video,
         '-frames:v', str(1),
         '-vcodec', 'png',
-        '-y', frame_file_name
+        '-y', temp_file
         ],
         check=True
     )
-    frame = cv2.cvtColor(cv2.imread(frame_file_name), cv2.COLOR_BGR2RGB)
-    os.remove(frame_file_name)
+    image = cv2.cvtColor(cv2.imread(temp_file), color)
+    os.remove(temp_file)
+    return image
+
+def visual_filter_face(label: Label, video):
     return (
-        bool(dlib.get_frontal_face_detector()(frame))
+        bool(dlib.get_frontal_face_detector()(
+            frame(label, video, cv2.COLOR_BGR2RGB)))
         == (args.visual_filter_face == 'include')
     )
+
+def visual_filter_word(label: Label, video):
+    image = frame(label, video, cv2.COLOR_BGR2GRAY)
+    _, threshold = cv2.threshold(
+        image,
+        0,
+        255,
+        cv2.THRESH_OTSU | cv2.THRESH_BINARY_INV)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (18, 18))
+    dilation = cv2.dilate(
+        threshold,
+        kernel,
+        iterations=1)
+    contours, _ = cv2.findContours(
+        dilation,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_NONE)
+    text = None
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        text = pytesseract.image_to_string(image[y:y + h, x:x + w])
+        if text:
+            break
+    return bool(text) == (args.visual_filter_word == 'include')

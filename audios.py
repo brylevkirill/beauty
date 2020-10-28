@@ -43,7 +43,7 @@ def tempo_from_chords(audio_file_name):
         (e - s - (e - s) % 0.01) for (s, e, _) in proc(feat)] or [
         duration(audio_file_name)
     ]
-    return collections.Counter(intervals).most_common(1)[0][0]
+    return 60 / collections.Counter(intervals).most_common(1)[0][0]
 
 def tempo_from_beats(audio_file_name):
     ...
@@ -160,8 +160,8 @@ def create_labels():
     if args.output_max_length:
         L[:] = [l for l in L if l < args.output_max_length
             ] + [args.output_max_length]
-    if args.labels_joins > 1:
-        L[:] = L[::args.labels_joins]
+    if args.labels_joints > 1:
+        L[:] = L[::args.labels_joints]
     if args.labels_splits > 1:
         L[:] = [
             L[i] + (L[i + 1] - L[i]) * j / args.labels_splits
@@ -222,7 +222,7 @@ def labels_from_beats(audio_file_name):
         not args.labels_from_beats_tracking and
         not args.labels_from_beats_tracking_dbn):
         args.labels_from_beats_tracking = True
-        args.labels_joins = 4
+        args.labels_joints = 4
     proc = []
     if args.labels_from_beats_detection:
         proc.append(madmom.features.beats.BeatDetectionProcessor(
