@@ -11,7 +11,7 @@ import labels
 from beauty import args
 from labels import labels_created, write_labels, Label
 from youtube import youtube_collections, youtube_playlists, youtube_video
-from filters import visual_filter, visual_filter_hard_cuts_base
+from filters import visual_filter, visual_filter_cuts_base
 
 class Video(typing.NamedTuple):
     url: str
@@ -88,7 +88,7 @@ def create_labels():
         video = read_video(video_url)
         points = [0]
         points.extend(
-            visual_filter_hard_cuts_base(
+            visual_filter_cuts_base(
                 Label(
                     input_url=video_url,
                     input_start_point=0,
