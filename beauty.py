@@ -39,15 +39,15 @@ def init_args():
         metavar='(%s | "any"|"orchestral"|"electronic"|"labeled")' % opt)
     arg('-v', '--videos', type=str, nargs='*', default=['flowers'],
         metavar='(%s | "any"|"flowers"|"nightsky"|"girls"|"girls2")' % opt)
-    arg('-i', '--images', type=str, nargs='*', default=[])
     arg('-o', '--output', type=str, nargs='*', default=[],
         metavar='(<file> | <live stream URL> | "-" (stdout))')
 
     arg('-l', '--labels', type=str, metavar='<labels file>')
     arg('--labels-reinit')
     arg('--labels-public')
-    arg('--labels-source', type=str, metavar='<labels file>')
-    arg('--labels-source-reinit')
+
+    arg('--input', type=str, metavar='<video file>')
+    arg('--input-labels', type=str, metavar='<labels file>')
 
     arg('-p', '--play')
     arg('-k', '--keep')
@@ -58,9 +58,6 @@ def init_args():
     arg('-n', '--nowait')
     arg('-s', '--subtitles')
 
-    arg('--input', type=str, metavar='<video file>')
-    arg('--input-labels', type=str, metavar='<labels file>')
-
     arg('--reencode')
     arg('--increment')
 
@@ -69,10 +66,7 @@ def init_args():
     arg('--output-format', type=str)
     arg('--output-quality', type=str, choices=['high', 'medium', 'low'])
 
-    arg('--labels-min-length', type=float, default=0.2)
-    arg('--labels-max-length', type=float)
-    arg('--labels-joints', type=int, default=1)
-    arg('--labels-splits', type=int, default=1)
+    arg('--labels-from-input')
     arg('--labels-from-chords')
     arg('--labels-from-chords-chroma')
     arg('--labels-from-chords-cnn')
@@ -84,6 +78,10 @@ def init_args():
     arg('--labels-from-notes')
     arg('--labels-from-notes-rnn')
     arg('--labels-from-notes-cnn')
+    arg('--labels-min-length', type=float, default=0.05)
+    arg('--labels-max-length', type=float)
+    arg('--labels-joints', type=int, default=1)
+    arg('--labels-splits', type=int, default=1)
 
     arg('--visual-filter-retries', type=int, default=5)
     arg('--visual-filter-ordered')
@@ -142,7 +140,6 @@ if __name__ == '__main__':
 
     import audios
     import coders
-    import images
     import labels
     import videos
     import youtube
@@ -154,16 +151,17 @@ if __name__ == '__main__':
     with multiprocessing.Manager() as manager:
         labels.labels = manager.list()
         videos.videos = manager.dict()
-        images.images = manager.list()
         random.seed(int.from_bytes(os.getrandom(4), 'big'))
-        if args.labels_source_reinit:
-            labels.write_labels(args.labels_source, videos.create_labels())
         if not args.labels_reinit:
             labels.read_labels()
         else:
-            if args.labels_source:
-                shutil.copyfile(args.labels_source, args.labels)
+            if args.input_labels:
+                shutil.copyfile(args.input_labels, args.labels)
                 labels.read_labels()
+            else:
+                if args.input and args.labels_from_input:
+                    new_labels = videos.labels_from_video(args.input)
+                    labels.update_labels(new_labels)
         if args.audios:
             args.audios[:] = audios.read_audios()
             if not labels.labels:
@@ -177,8 +175,5 @@ if __name__ == '__main__':
         if args.videos:
             videos.read_videos()
             videos.update_labels()
-        elif args.images:
-            images.read_images()
-            images.update_labels()
         labels.write_labels()
         coders.write_video(labels_before)

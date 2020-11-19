@@ -147,52 +147,54 @@ def create_labels():
        not args.labels_from_notes):
         args.labels_from_chords = True
         args.labels_from_beats = True
-    L = sorted(set([
+    points = sorted(set([
         0,
-        *(labels_from_chords(args.audio_output)
+        *(points_from_chords(args.audio_output)
             if args.labels_from_chords else []),
-        *(labels_from_beats(args.audio_output)
+        *(points_from_beats(args.audio_output)
             if args.labels_from_beats else []),
-        *(labels_from_notes(args.audio_output)
+        *(points_from_notes(args.audio_output)
             if args.labels_from_notes else []),
         duration(args.audio_output)
     ]))
     if args.output_max_length:
-        L[:] = [l for l in L if l < args.output_max_length
+        points[:] = [
+            p for p in points
+            if p < args.output_max_length
             ] + [args.output_max_length]
     if args.labels_joints > 1:
-        L[:] = L[::args.labels_joints]
+        points[:] = points[::args.labels_joints]
     if args.labels_splits > 1:
-        L[:] = [
-            L[i] + (L[i + 1] - L[i]) * j / args.labels_splits
-            for i in range(len(L) - 1)
+        points[:] = [
+            points[i] + (points[i + 1] - points[i]) * j / args.labels_splits
+            for i in range(len(points) - 1)
             for j in range(args.labels_splits)
         ]
     if args.labels_max_length:
-        L[:] = [
-            L[i] + j * args.labels_max_length
-            for i in range(len(L) - 1)
+        points[:] = [
+            points[i] + j * args.labels_max_length
+            for i in range(len(points) - 1)
             for j in range(1 +
-                int((L[i + 1] - L[i]) / args.labels_max_length))
+                int((points[i + 1] - points[i]) / args.labels_max_length))
         ]
     if args.labels_min_length:
-        L_last = [L[0]]
-        L[1:-1] = [
-            L[i]
-            for i in range(1, len(L) - 1)
-            if L[i] - L_last[0] >= args.labels_min_length and
-                L[-1] - L[i] >= args.labels_min_length and
-                not L_last.remove(L_last[0]) and not L_last.append(L[i])
+        p = [points[0]]
+        points[1:-1] = [
+            points[i]
+            for i in range(1, len(points) - 1)
+            if points[i] - p[0] >= args.labels_min_length and
+                points[-1] - points[i] >= args.labels_min_length and
+                not p.remove(p[0]) and not p.append(points[i])
         ]
     return [
         Label(
-            output_start_point=L[i],
-            output_final_point=L[i + 1]
+            output_start_point=points[i],
+            output_final_point=points[i + 1]
         )
-        for i in range(len(L) - 1)
+        for i in range(len(points) - 1)
     ]
 
-def labels_from_chords(audio_file_name):
+def points_from_chords(audio_file_name):
     if (not args.labels_from_chords_chroma and
         not args.labels_from_chords_cnn):
         args.labels_from_chords_chroma = True
@@ -216,7 +218,7 @@ def labels_from_chords(audio_file_name):
         (e for (_, e, _) in p(f)) for (p, f) in zip(proc, feat)
     ))
 
-def labels_from_beats(audio_file_name):
+def points_from_beats(audio_file_name):
     if (not args.labels_from_beats_detection and
         not args.labels_from_beats_detection_crf and
         not args.labels_from_beats_tracking and
@@ -249,7 +251,7 @@ def labels_from_beats(audio_file_name):
         for p in proc
     ))
 
-def labels_from_notes(audio_file_name):
+def points_from_notes(audio_file_name):
     if (not args.labels_from_notes_rnn and
         not args.labels_from_notes_cnn):
         args.labels_from_notes_rnn = True

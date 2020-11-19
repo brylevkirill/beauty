@@ -82,27 +82,32 @@ def read_video(video_url, strict=True):
         )
     return videos[video_url]
 
-def create_labels():
-    labels = []
-    for video_url in args.videos:
-        video = read_video(video_url)
-        points = [0]
-        points.extend(
-            visual_filter_cuts_base(
-                Label(
-                    input_url=video_url,
-                    input_start_point=0,
-                    input_final_point=video.duration
-                ),
-                video.url))
-        points.append(video.duration)
-        labels.append(Label(
-            output_start_point=0,
-            output_final_point=0,
-            input_url=video_url,
-            input_start_point=points[:-1],
-            input_final_point=points[1:]))
-    return labels
+def labels_from_video(video_url):
+    video = read_video(video_url)
+    points = [0]
+    points.extend(
+        visual_filter_cuts_base(
+            Label(
+                input_url=video_url,
+                input_start_point=0,
+                input_final_point=video.duration
+            ),
+            video.url))
+    points.append(video.duration)
+    p = [points[0]]
+    points[1:-1] = [
+        points[i] for i in range(1, len(points) - 1)
+        if points[i] - p[0] >= args.labels_min_length and
+            points[-1] - points[i] >= args.labels_min_length and
+            not p.remove(p[0]) and not p.append(points[i])
+    ]
+    return [
+        Label(
+            output_start_point=points[i],
+            output_final_point=points[i + 1]
+        )
+        for i in range(len(points) - 1)
+    ]
 
 def update_labels():
     pool = multiprocessing.pool.Pool(os.cpu_count())
