@@ -76,8 +76,18 @@ def init_args():
     arg('--labels-from-beats-tracking')
     arg('--labels-from-beats-tracking-dbn')
     arg('--labels-from-notes')
+    arg('--labels-from-notes-min-interval', type=float, default=0.02)
+    arg('--labels-from-notes-min-silence', type=float, default=-90)
     arg('--labels-from-notes-rnn')
     arg('--labels-from-notes-cnn')
+    arg('--labels-from-onsets')
+    arg('--labels-from-onsets-method', type=str,
+        choices=['energy', 'hfc', 'complex', 'phase',
+            'specdiff', 'kl', 'mkl', 'specflux'],
+        default='hfc')
+    arg('--labels-from-onsets-threshold', type=float, default=0.3)
+    arg('--labels-from-onsets-min-interval', type=float, default=0.02)
+    arg('--labels-from-onsets-min-silence', type=float, default=-90)
     arg('--labels-min-length', type=float, default=0.05)
     arg('--labels-max-length', type=float)
     arg('--labels-joints', type=int, default=1)

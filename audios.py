@@ -1,3 +1,4 @@
+import aubio
 import collections
 import itertools
 import madmom.audio.chroma
@@ -144,7 +145,8 @@ def create_labels():
         args.labels_from_notes = True
     if (not args.labels_from_chords and
        not args.labels_from_beats and
-       not args.labels_from_notes):
+       not args.labels_from_notes and
+       not args.labels_from_onsets):
         args.labels_from_chords = True
         args.labels_from_beats = True
     points = sorted(set([
@@ -155,6 +157,8 @@ def create_labels():
             if args.labels_from_beats else []),
         *(points_from_notes(args.audio_output)
             if args.labels_from_notes else []),
+        *(points_from_onsets(args.audio_output)
+            if args.labels_from_onsets else []),
         duration(args.audio_output)
     ]))
     if args.output_max_length:
@@ -251,10 +255,30 @@ def points_from_beats(audio_file_name):
         for p in proc
     ))
 
+def points_from_notes_aubio(audio_file_name):
+    sound = pydub.AudioSegment.from_mp3(audio_file_name)
+    _, temp_file_name = tempfile.mkstemp(suffix='.wav')
+    sound.export(temp_file_name, format='wav')
+    source = aubio.source(temp_file_name)
+    notes = aubio.notes(samplerate=source.samplerate)
+    notes.set_minioi_ms(args.labels_from_notes_min_interval)
+    notes.set_silence(args.labels_from_notes_min_silence)
+    timestamps = []
+    total_frames = 0
+    while True:
+        samples, read = source()
+        if notes(samples)[0] != 0:
+            timestamps.append(total_frames / source.samplerate)
+        total_frames += read
+        if read < source.hop_size:
+            break
+    os.remove(temp_file_name)
+    return set(timestamps)
+
 def points_from_notes(audio_file_name):
     if (not args.labels_from_notes_rnn and
         not args.labels_from_notes_cnn):
-        args.labels_from_notes_rnn = True
+        return points_from_notes_aubio(audio_file_name)
     proc = []
     act = []
     if args.labels_from_notes_rnn:
@@ -273,3 +297,24 @@ def points_from_notes(audio_file_name):
     return set(itertools.chain.from_iterable(
         (t for (t, *_) in p(a)) for (p, a) in zip(proc, act)
     ))
+
+def points_from_onsets(audio_file_name):
+    sound = pydub.AudioSegment.from_mp3(audio_file_name)
+    _, temp_file_name = tempfile.mkstemp(suffix='.wav')
+    sound.export(temp_file_name, format='wav')
+    source = aubio.source(temp_file_name)
+    onset = aubio.onset(
+        args.labels_from_onsets_method,
+        samplerate=source.samplerate)
+    onset.set_threshold(args.labels_from_onsets_threshold)
+    onset.set_minioi_ms(args.labels_from_onsets_min_interval)
+    onset.set_silence(args.labels_from_onsets_min_silence)
+    timestamps = []
+    while True:
+        samples, read = source()
+        if onset(samples):
+            timestamps.append(onset.get_last() / source.samplerate)
+        if read < source.hop_size:
+            break
+    os.remove(temp_file_name)
+    return set(timestamps)
