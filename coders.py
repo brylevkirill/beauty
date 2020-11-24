@@ -6,6 +6,7 @@ import signal
 import subprocess
 import sys
 import urllib.parse
+import uuid
 
 import labels
 import videos
@@ -223,10 +224,15 @@ def play_video():
                             replace('(', '\\(').
                             replace(')', '\\)').
                             replace('&', '\\&')
-                        for arg in sys.argv + ['--output', '-'] +
-                            [target for target in args.output if target != '-']
+                        for arg in sys.argv + [
+                            '--output-id', str(id),
+                            '--output', '-'] + [
+                            target for target in args.output if target != '-'
+                            ] + ([
+                            '--subtitles-output', args.subtitles_output % id
+                            ] if args.subtitles else [])
                     )),
-                    '--sub-file=\'%s\' ' % args.subtitles_output % output
+                    '--sub-file=\'%s\' ' % args.subtitles_output % id
                         if args.subtitles else '',
                     '--lavfi-complex=\'' \
                         '[vid2]scale=iw/2:ih/2[v],' \
@@ -235,6 +241,7 @@ def play_video():
                         if args.input else ''
                 )
                 for i in range(tasks)
+                for id in [uuid.uuid1()]
             ) + '' \
         '"'
     )

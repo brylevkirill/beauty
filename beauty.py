@@ -25,8 +25,8 @@ import uuid
 
 def init_args():
     parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
     def arg(*args, **kwargs):
         kwargs['action'] = 'store' if 'type' in kwargs else 'store_true'
         for a in args:
@@ -65,6 +65,7 @@ def init_args():
     arg('--output-max-length', type=float)
     arg('--output-format', type=str)
     arg('--output-quality', type=str, choices=['high', 'medium', 'low'])
+    arg('--output-id', type=str)
 
     arg('--labels-from-input')
     arg('--labels-from-chords')
@@ -76,8 +77,8 @@ def init_args():
     arg('--labels-from-beats-tracking')
     arg('--labels-from-beats-tracking-dbn')
     arg('--labels-from-notes')
-    arg('--labels-from-notes-min-interval', type=float, default=0.02)
-    arg('--labels-from-notes-min-silence', type=float, default=-90)
+    arg('--labels-from-notes-min-length', type=float, default=0.03)
+    arg('--labels-from-notes-min-volume', type=float, default=-70)
     arg('--labels-from-notes-rnn')
     arg('--labels-from-notes-cnn')
     arg('--labels-from-onsets')
@@ -86,9 +87,9 @@ def init_args():
             'specdiff', 'kl', 'mkl', 'specflux'],
         default='hfc')
     arg('--labels-from-onsets-threshold', type=float, default=0.3)
-    arg('--labels-from-onsets-min-interval', type=float, default=0.02)
-    arg('--labels-from-onsets-min-silence', type=float, default=-90)
-    arg('--labels-min-length', type=float, default=0.05)
+    arg('--labels-from-onsets-min-length', type=float, default=0.02)
+    arg('--labels-from-onsets-min-volume', type=float, default=-90)
+    arg('--labels-min-length', type=float, default=0.2)
     arg('--labels-max-length', type=float)
     arg('--labels-joints', type=int, default=1)
     arg('--labels-splits', type=int, default=1)
@@ -124,13 +125,13 @@ def init_args():
 
     import beauty
     beauty.args = parser.parse_args()
-    beauty.output = 'output.%s' % uuid.uuid1()
+    beauty.output = 'output.%s' % (
+        beauty.args.output_id if beauty.args.output_id else uuid.uuid1())
     from beauty import args, output
     if not args.output_format:
         stream_output = any(
-            bool(urllib.parse.urlparse(item).scheme) for item in args.output
-        )
-    args.output_format = 'flv' if stream_output or args.play else 'mp4'
+            bool(urllib.parse.urlparse(item).scheme) for item in args.output)
+        args.output_format = 'flv' if stream_output or args.play else 'mp4'
     args.labels = output + '.txt' if not args.labels else args.labels
     args.video_output = args.video_output % (output, args.output_format)
     args.audio_output = args.audio_output % (output, 'm4a')

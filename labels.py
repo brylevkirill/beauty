@@ -81,7 +81,10 @@ def write_labels(custom_file_name=None, custom_labels=None):
             )
         )
     if args.subtitles:
-        write_subtitles(args.subtitles_output % output)
+        write_subtitles(
+            args.subtitles_output % output if (
+                '%' in args.subtitles_output)
+            else args.subtitles_output)
 
 def parse_label(s):
     t = s.split('\t')

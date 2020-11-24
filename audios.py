@@ -117,7 +117,7 @@ def shape_audio(audio_file_name, length=None):
     start, final, total = start / 1000, final / 1000, len(sound) / 1000
     final = length if length and length < final else final
     if start != 0 or final != total:
-        _, temp_file_name = tempfile.mkstemp(suffix='.m4a')
+        temp_file = tempfile.NamedTemporaryFile(suffix='.m4a', delete=False)
         process = subprocess.run([
             'ffmpeg',
             '-loglevel', args.loglevel,
@@ -125,11 +125,11 @@ def shape_audio(audio_file_name, length=None):
             '-to', str(final),
             '-i', audio_file_name,
             '-y',
-            temp_file_name
+            temp_file.name
             ],
             check=True
         )
-        os.replace(temp_file_name, audio_file_name)
+        os.replace(temp_file.name, audio_file_name)
 
 def create_labels():
     if (args.labels_from_chords_chroma or
@@ -255,26 +255,6 @@ def points_from_beats(audio_file_name):
         for p in proc
     ))
 
-def points_from_notes_aubio(audio_file_name):
-    sound = pydub.AudioSegment.from_mp3(audio_file_name)
-    _, temp_file_name = tempfile.mkstemp(suffix='.wav')
-    sound.export(temp_file_name, format='wav')
-    source = aubio.source(temp_file_name)
-    notes = aubio.notes(samplerate=source.samplerate)
-    notes.set_minioi_ms(args.labels_from_notes_min_interval)
-    notes.set_silence(args.labels_from_notes_min_silence)
-    timestamps = []
-    total_frames = 0
-    while True:
-        samples, read = source()
-        if notes(samples)[0] != 0:
-            timestamps.append(total_frames / source.samplerate)
-        total_frames += read
-        if read < source.hop_size:
-            break
-    os.remove(temp_file_name)
-    return set(timestamps)
-
 def points_from_notes(audio_file_name):
     if (not args.labels_from_notes_rnn and
         not args.labels_from_notes_cnn):
@@ -298,23 +278,41 @@ def points_from_notes(audio_file_name):
         (t for (t, *_) in p(a)) for (p, a) in zip(proc, act)
     ))
 
+def aubio_source(audio_file_name):
+    sound = pydub.AudioSegment.from_file(audio_file_name)
+    temp_file = tempfile.NamedTemporaryFile(suffix='.wav')
+    sound.export(temp_file.name, format='wav')
+    return aubio.source(temp_file.name)
+
+def points_from_notes_aubio(audio_file_name):
+    source = aubio_source(audio_file_name)
+    notes = aubio.notes(samplerate=source.samplerate)
+    notes.set_minioi_ms(args.labels_from_notes_min_length * 1000)
+    notes.set_silence(args.labels_from_notes_min_volume)
+    points = []
+    frames = 0
+    while True:
+        samples, read = source()
+        if notes(samples)[0] != 0:
+            points.append(frames / source.samplerate)
+        frames += read
+        if read < source.hop_size:
+            break
+    return set(points)
+
 def points_from_onsets(audio_file_name):
-    sound = pydub.AudioSegment.from_mp3(audio_file_name)
-    _, temp_file_name = tempfile.mkstemp(suffix='.wav')
-    sound.export(temp_file_name, format='wav')
-    source = aubio.source(temp_file_name)
+    source = aubio_source(audio_file_name)
     onset = aubio.onset(
         args.labels_from_onsets_method,
         samplerate=source.samplerate)
     onset.set_threshold(args.labels_from_onsets_threshold)
-    onset.set_minioi_ms(args.labels_from_onsets_min_interval)
-    onset.set_silence(args.labels_from_onsets_min_silence)
-    timestamps = []
+    onset.set_minioi_ms(args.labels_from_onsets_min_length * 1000)
+    onset.set_silence(args.labels_from_onsets_min_volume)
+    points = []
     while True:
         samples, read = source()
         if onset(samples):
-            timestamps.append(onset.get_last() / source.samplerate)
+            points.append(onset.get_last() / source.samplerate)
         if read < source.hop_size:
             break
-    os.remove(temp_file_name)
-    return set(timestamps)
+    return set(points)

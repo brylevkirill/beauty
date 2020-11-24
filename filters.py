@@ -82,7 +82,7 @@ def visual_filter_pace(label: Label, video):
         filter_func)
 
 def frame(label: Label, video, color):
-    _, temp_file_name = tempfile.mkstemp(suffix='.png')
+    temp_file = tempfile.NamedTemporaryFile(suffix='.png')
     process = subprocess.run([
         'ffmpeg',
         '-loglevel', args.loglevel,
@@ -90,12 +90,11 @@ def frame(label: Label, video, color):
         '-i', video,
         '-frames:v', str(1),
         '-vcodec', 'png',
-        '-y', temp_file_name
+        '-y', temp_file.name
         ],
         check=True
     )
-    image = cv2.cvtColor(cv2.imread(temp_file_name), color)
-    os.remove(temp_file_name)
+    image = cv2.cvtColor(cv2.imread(temp_file.name), color)
     return image
 
 def visual_filter_face(label: Label, video):
