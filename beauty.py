@@ -35,28 +35,29 @@ def init_args():
         parser.add_argument(*args, **kwargs)
 
     opt = '<file|URL> | <YT playlist URL> | "ytsearch"[""|<N>|"all"]":"<query>'
-    arg('-a', '--audios', type=str, nargs='*', default=['orchestral'],
+    arg('--audios', type=str, nargs='*', default=['orchestral'],
         metavar='(%s | "any"|"orchestral"|"electronic"|"labeled")' % opt)
-    arg('-v', '--videos', type=str, nargs='*', default=['flowers'],
+    arg('--videos', type=str, nargs='*', default=['flowers'],
         metavar='(%s | "any"|"flowers"|"nightsky"|"girls"|"girls2")' % opt)
-    arg('-o', '--output', type=str, nargs='*', default=[],
+    arg('--output', type=str, nargs='*', default=[],
         metavar='(<file> | <live stream URL> | "-" (stdout))')
 
-    arg('-l', '--labels', type=str, metavar='<labels file>')
+    arg('--labels', type=str, metavar='<labels file>')
     arg('--labels-reinit')
     arg('--labels-public')
 
     arg('--input', type=str, metavar='<video file>')
     arg('--input-labels', type=str, metavar='<labels file>')
 
-    arg('-p', '--play')
-    arg('-k', '--keep')
-    arg('-x', '--loop')
-    arg('-t', '--time', type=float, default=3600)
-    arg('-q', '--queue', type=int, default=2)
-    arg('-d', '--delay', type=float, default=0.333)
-    arg('-n', '--nowait')
-    arg('-s', '--subtitles')
+    arg('--play')
+    arg('--keep')
+    arg('--loop')
+    arg('--time', type=float, default=3600)
+    arg('--queue', type=int, default=2)
+    arg('--queue-delay', type=float, default=0.333)
+    arg('--nowait')
+    arg('--cache-delay', type=float, default=0.5)
+    arg('--cache-limit', type=str, default='64M')
 
     arg('--reencode')
     arg('--increment')
@@ -66,6 +67,7 @@ def init_args():
     arg('--output-format', type=str)
     arg('--output-quality', type=str, choices=['high', 'medium', 'low'])
     arg('--output-id', type=str)
+    arg('--subtitles')
 
     arg('--labels-from-input')
     arg('--labels-from-chords')

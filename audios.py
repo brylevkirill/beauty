@@ -278,12 +278,6 @@ def points_from_notes(audio_file_name):
         (t for (t, *_) in p(a)) for (p, a) in zip(proc, act)
     ))
 
-def aubio_source(audio_file_name):
-    sound = pydub.AudioSegment.from_file(audio_file_name)
-    temp_file = tempfile.NamedTemporaryFile(suffix='.wav')
-    sound.export(temp_file.name, format='wav')
-    return aubio.source(temp_file.name)
-
 def points_from_notes_aubio(audio_file_name):
     source = aubio_source(audio_file_name)
     notes = aubio.notes(samplerate=source.samplerate)
@@ -316,3 +310,9 @@ def points_from_onsets(audio_file_name):
         if read < source.hop_size:
             break
     return set(points)
+
+def aubio_source(audio_file_name):
+    sound = pydub.AudioSegment.from_file(audio_file_name)
+    temp_file = tempfile.NamedTemporaryFile(suffix='.wav')
+    sound.export(temp_file.name, format='wav')
+    return aubio.source(temp_file.name)

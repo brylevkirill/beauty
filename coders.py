@@ -202,49 +202,51 @@ def play_video():
     delay = args.output_max_length if args.output_max_length else 60
     tasks = int(args.time / delay) if args.loop else 1
     global player_config
-    command = (
-        'bash -c "' \
-            'mpv ' +
-                ('--input-conf=\'%s\' ' % player_config
-                    if args.input and args.input_labels else '') +
-                '--fs ' + ' '.join(
-                '--{ <( ' \
-                    'sleep %d; ' \
-                    'timeout --foreground %f ' \
-                         'parallel --semaphore -j %d --fg --ungroup %s ' \
-                    ') ' \
-                    '%s' \
-                    '%s' \
-                '--} ' % (
-                    max((i - 1 + args.delay) * delay, 0),
-                    args.queue * delay if args.nowait else 0,
-                    args.queue,
-                    'python \\\'%s\\\'' % ('\\\' \\\''.join(
-                        arg.replace(' ', '\\ ').
-                            replace('(', '\\(').
-                            replace(')', '\\)').
-                            replace('&', '\\&')
-                        for arg in sys.argv + [
-                            '--output-id', str(id),
-                            '--output', '-'] + [
-                            target for target in args.output if target != '-'
-                            ] + ([
-                            '--subtitles-output', args.subtitles_output % id
-                            ] if args.subtitles else [])
-                    )),
-                    '--sub-file=\'%s\' ' % args.subtitles_output % id
-                        if args.subtitles else '',
-                    '--lavfi-complex=\'' \
-                        '[vid2]scale=iw/2:ih/2[v],' \
-                        '[vid1][v]overlay=W-w:H-h[vo]\' ' \
-                    '--external-file=\'%s\' ' % args.input
-                        if args.input else ''
-                )
-                for i in range(tasks)
-                for id in [uuid.uuid1()]
-            ) + '' \
-        '"'
-    )
+    command = ('bash -c \"mpv ' +
+        ('--input-conf=\'{}\' '.format(player_config)
+            if args.input else '') +
+        '--cache=yes ' \
+        '--fs ' +
+        ' '.join(
+            '--{ ' \
+                '<( ' +
+                    ('sleep {}; '.format((i - 1 + args.queue_delay) * delay)
+                        if i > 0 else '') +
+                    ('timeout --foreground {} '.format(args.queue * delay)
+                        if args.nowait else '') +
+                    'parallel --fg --ungroup --semaphore ' \
+                        '-j{} '.format(args.queue) +
+                    'python \\\'{}\\\''.format(
+                        '\\\' \\\''.join(
+                            arg.replace(' ', '\\ ').
+                                replace('(', '\\(').
+                                replace(')', '\\)').
+                                replace('&', '\\&')
+                            for arg in sys.argv + [
+                                '--output-id', str(id),
+                                '--output', '-'] + [
+                                    target for target in args.output
+                                    if target != '-'
+                                ] + ([
+                                    '--subtitles-output',
+                                    args.subtitles_output % id
+                                ] if args.subtitles else [])
+                        )) +
+                    '| pv -qCB {} '.format(args.cache_limit) +
+                    '| (pv -qSs 1; sleep {}; cat) '.format(
+                        args.cache_delay * delay) +
+                ') ' +
+                ('--sub-file=\'{}\' '.format(args.subtitles_output % id)
+                    if args.subtitles else '') +
+                ('--lavfi-complex=\'' \
+                    '[vid2]scale=iw/2:ih/2[v],' \
+                    '[vid1][v]overlay=W-w:H-h[vo]\' ' \
+                    '--external-file=\'{}\' '.format(args.input)
+                    if args.input else '') +
+            '--} '
+            for i in range(tasks)
+            for id in [uuid.uuid1()]
+        ) + '"')
     os.system(command)
     play_video_cleanup()
 
@@ -255,15 +257,17 @@ def play_video_prepare():
 
 def play_video_prepare_args():
     sys.argv.remove('--play')
-    if not args.audios:
+    if '--audios' not in sys.argv:
         sys.argv.extend(['--audios', 'any'])
-    if not args.videos:
+    if '--videos' not in sys.argv:
         sys.argv.extend(['--videos', 'any'])
         sys.argv.extend(['--videos-max-number', '1'])
-    if not args.output_quality:
+    if '--output-quality' not in sys.argv:
         sys.argv.extend(['--output-quality', 'low'])
-    if args.output_format and '--output-format' not in sys.argv:
+    if '--output-format' not in sys.argv and args.output_format:
         sys.argv.extend(['--output-format', args.output_format])
+    if '--loglevel' not in sys.argv:
+        sys.argv.extend(['--loglevel', 'quiet'])
 
 def play_video_prepare_edit():
     global player_config
