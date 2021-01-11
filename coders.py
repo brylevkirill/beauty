@@ -31,7 +31,7 @@ def write_video(labels_before):
                 os.remove(args.audio_output)
             os.remove(args.video_output)
         else:
-            os.replace(args.video_output, output)
+            shutil.move(args.video_output, output)
 
 def write_video_reencode():
     for l in labels.labels:
@@ -69,8 +69,8 @@ def write_video_reencode():
         '-c:v', 'libx264',
         *(['-crf', '17'] if args.output_quality == 'high' else
             ['-crf', '33'] if args.output_quality == 'low' else []),
-        *(['-preset', 'slow'] if args.output_quality == 'high' else
-            ['-preset', 'fast'] if args.output_quality == 'low' else []),
+        *(['-preset', 'veryslow'] if args.output_quality == 'high' else
+            ['-preset', 'veryfast'] if args.output_quality == 'low' else []),
         *(['-tune', 'film'] if args.output_quality == 'high' else []),
         '-c:a', 'libmp3lame',
         '-f', 'tee',
@@ -201,6 +201,8 @@ def play_video():
     video = '%d.' + output
     delay = args.output_max_length if args.output_max_length else 60
     tasks = int(args.time / delay) if args.loop else 1
+    if args.queue == 1:
+        args.queue_delay = 0
     global player_config
     command = ('bash -c \"mpv ' +
         ('--input-conf=\'{}\' '.format(player_config)
@@ -257,10 +259,7 @@ def play_video_prepare():
 
 def play_video_prepare_args():
     sys.argv.remove('--play')
-    if '--audios' not in sys.argv:
-        sys.argv.extend(['--audios', 'any'])
-    if '--videos' not in sys.argv:
-        sys.argv.extend(['--videos', 'any'])
+    if '--videos-max-number' not in sys.argv:
         sys.argv.extend(['--videos-max-number', '1'])
     if '--output-quality' not in sys.argv:
         sys.argv.extend(['--output-quality', 'low'])

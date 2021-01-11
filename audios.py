@@ -129,7 +129,7 @@ def shape_audio(audio_file_name, length=None):
             ],
             check=True
         )
-        os.replace(temp_file.name, audio_file_name)
+        shutil.move(temp_file.name, audio_file_name)
 
 def create_labels():
     if (args.labels_from_chords_chroma or

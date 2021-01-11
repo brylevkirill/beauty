@@ -53,16 +53,19 @@ def init_args():
     arg('--keep')
     arg('--loop')
     arg('--time', type=float, default=3600)
-    arg('--queue', type=int, default=2)
+    arg('--queue', type=int, default=1)
     arg('--queue-delay', type=float, default=0.333)
     arg('--nowait')
-    arg('--cache-delay', type=float, default=0.5)
+    arg('--cache-delay', type=float, default=0.1)
     arg('--cache-limit', type=str, default='64M')
 
     arg('--reencode')
     arg('--increment')
 
     arg('--videos-max-number', type=int)
+    arg('--videos-format', type=str)
+    arg('--videos-width', type=int)
+    arg('--videos-height', type=int)
     arg('--output-max-length', type=float)
     arg('--output-format', type=str)
     arg('--output-quality', type=str, choices=['high', 'medium', 'low'])
@@ -134,6 +137,8 @@ def init_args():
         stream_output = any(
             bool(urllib.parse.urlparse(item).scheme) for item in args.output)
         args.output_format = 'flv' if stream_output or args.play else 'mp4'
+    if not args.videos_width and not args.videos_height:
+        args.videos_height = 1080
     args.labels = output + '.txt' if not args.labels else args.labels
     args.video_output = args.video_output % (output, args.output_format)
     args.audio_output = args.audio_output % (output, 'm4a')
