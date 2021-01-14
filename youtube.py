@@ -108,10 +108,10 @@ def youtube_playlist_url(id):
 
 def youtube_video(
     url,
-    filter='bestvideo' \
-        f'[ext={args.videos_format or "mp4"}]' \
-        f'{args.videos_width and f"[width={args.videos_width}]" or ""}' \
-        f'{args.videos_height and f"[height={args.videos_height}]" or ""}',
+    filter='bestvideo' +
+        (f'[ext={args.videos_format}]' if args.videos_format else '') +
+        (f'[width={args.videos_width}]' if args.videos_width else '') +
+        (f'[height={args.videos_height}]' if args.videos_height else ''),
     strict=True):
     try:
         process = subprocess.run([

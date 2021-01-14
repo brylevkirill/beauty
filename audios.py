@@ -5,6 +5,7 @@ import madmom.audio.chroma
 import madmom.features.beats
 import madmom.features.chords
 import madmom.features.notes
+import numpy
 import os
 import pydub
 import random
@@ -37,6 +38,27 @@ def duration(audio_url):
 def tempo(audio_file_name):
     return tempo_from_chords(audio_file_name)
 
+def tempo_from_beats_madmom(audio_file_name):
+    proc = madmom.features.tempo.TempoEstimationProcessor(fps=100)
+    act = madmom.features.beats.RNNBeatProcessor()(audio_file_name)
+    return proc(act)[0][0]
+
+def tempo_from_beats_aubio(audio_file_name):
+    source = aubio_source(audio_file_name)
+    win_s, hop_s, samplerate = 1024, 512, 44100
+    tempi = aubio.tempo("specdiff", win_s, hop_s, samplerate)
+    beats = []
+    while True:
+        samples, read = source()
+        is_beat = tempi(samples)
+        if is_beat:
+            this_beat = tempi.get_last_s()
+            beats.append(this_beat)
+        if read < hop_s:
+            break
+    bpms = 60 / numpy.diff(beats)
+    return numpy.median(bpms)
+
 def tempo_from_chords(audio_file_name):
     proc = madmom.features.chords.DeepChromaChordRecognitionProcessor()
     feat = madmom.audio.chroma.DeepChromaProcessor()(audio_file_name)
@@ -45,9 +67,6 @@ def tempo_from_chords(audio_file_name):
         duration(audio_file_name)
     ]
     return 60 / collections.Counter(intervals).most_common(1)[0][0]
-
-def tempo_from_beats(audio_file_name):
-    ...
 
 def read_audios():
     youtube_collections(args.audios, 'audio')
@@ -315,4 +334,5 @@ def aubio_source(audio_file_name):
     sound = pydub.AudioSegment.from_file(audio_file_name)
     temp_file = tempfile.NamedTemporaryFile(suffix='.wav')
     sound.export(temp_file.name, format='wav')
-    return aubio.source(temp_file.name)
+    samplerate, hop_s = 44100, 512
+    return aubio.source(temp_file.name, samplerate, hop_s)

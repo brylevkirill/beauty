@@ -234,9 +234,8 @@ def play_video():
                                     args.subtitles_output % id
                                 ] if args.subtitles else [])
                         )) +
-                    '| pv -qCB {} '.format(args.cache_limit) +
-                    '| (pv -qSs 1; sleep {}; cat) '.format(
-                        args.cache_delay * delay) +
+                    '| (pv -qSs 1; sleep {}; pv -qCB {}; cat) '.format(
+                        args.cache_delay * delay, args.cache_limit) +
                 ') ' +
                 ('--sub-file=\'{}\' '.format(args.subtitles_output % id)
                     if args.subtitles else '') +
@@ -259,6 +258,7 @@ def play_video_prepare():
 
 def play_video_prepare_args():
     sys.argv.remove('--play')
+    sys.argv.append('--save')
     if '--videos-max-number' not in sys.argv:
         sys.argv.extend(['--videos-max-number', '1'])
     if '--output-quality' not in sys.argv:

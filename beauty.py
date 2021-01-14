@@ -40,7 +40,7 @@ def init_args():
     arg('--videos', type=str, nargs='*', default=['flowers'],
         metavar='(%s | "any"|"flowers"|"nightsky"|"girls"|"girls2")' % opt)
     arg('--output', type=str, nargs='*', default=[],
-        metavar='(<file> | <live stream URL> | "-" (stdout))')
+        metavar='(<file> | <YT or IG live stream URL> | "-" (stdout))')
 
     arg('--labels', type=str, metavar='<labels file>')
     arg('--labels-reinit')
@@ -50,14 +50,14 @@ def init_args():
     arg('--input-labels', type=str, metavar='<labels file>')
 
     arg('--play')
-    arg('--keep')
+    arg('--save')
     arg('--loop')
     arg('--time', type=float, default=3600)
     arg('--queue', type=int, default=1)
     arg('--queue-delay', type=float, default=0.333)
     arg('--nowait')
     arg('--cache-delay', type=float, default=0.1)
-    arg('--cache-limit', type=str, default='64M')
+    arg('--cache-limit', type=str, default='1M')
 
     arg('--reencode')
     arg('--increment')
@@ -133,17 +133,21 @@ def init_args():
     beauty.output = 'output.%s' % (
         beauty.args.output_id if beauty.args.output_id else uuid.uuid1())
     from beauty import args, output
+    if not args.videos_width and not args.videos_height:
+        args.videos_height = 1080
+    if not args.videos_format:
+        args.videos_format = 'mp4'
     if not args.output_format:
         stream_output = any(
             bool(urllib.parse.urlparse(item).scheme) for item in args.output)
         args.output_format = 'flv' if stream_output or args.play else 'mp4'
-    if not args.videos_width and not args.videos_height:
-        args.videos_height = 1080
     args.labels = output + '.txt' if not args.labels else args.labels
     args.video_output = args.video_output % (output, args.output_format)
     args.audio_output = args.audio_output % (output, 'm4a')
     args.cache = 'video.' + output + '.%s.' + args.output_format
     beauty.output += '.' + args.output_format
+    if args.save:
+        args.output.append(beauty.output)
     if not args.labels or not os.path.isfile(args.labels):
         args.labels_reinit = True
     if not args.reencode and not args.increment:
