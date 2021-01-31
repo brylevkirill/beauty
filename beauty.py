@@ -36,7 +36,7 @@ def init_args():
 
     opt = '<file|URL> | <YT playlist URL> | "ytsearch"[""|<N>|"all"]":"<query>'
     arg('--audios', type=str, nargs='*', default=['orchestral'],
-        metavar='(%s | "any"|"orchestral"|"electronic"|"labeled")' % opt)
+        metavar='(%s | "none"|"any"|"orchestral"|"electronic"|"labeled")' % opt)
     arg('--videos', type=str, nargs='*', default=['flowers'],
         metavar='(%s | "any"|"flowers"|"nightsky"|"girls"|"girls2")' % opt)
     arg('--output', type=str, nargs='*', default=[],
@@ -142,8 +142,10 @@ def init_args():
             bool(urllib.parse.urlparse(item).scheme) for item in args.output)
         args.output_format = 'flv' if stream_output or args.play else 'mp4'
     args.labels = output + '.txt' if not args.labels else args.labels
+    args.audios = args.audios if args.audios != ['none'] else None
+    args.audio_output = (
+        args.audio_output % (output, 'm4a') if args.audios else None)
     args.video_output = args.video_output % (output, args.output_format)
-    args.audio_output = args.audio_output % (output, 'm4a')
     args.cache = 'video.' + output + '.%s.' + args.output_format
     beauty.output += '.' + args.output_format
     if args.save:

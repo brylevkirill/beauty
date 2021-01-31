@@ -19,30 +19,6 @@ class Video(typing.NamedTuple):
 
 videos = {}
 
-def property(media_url, stream, prop):
-    process = subprocess.run([
-        'ffprobe',
-        '-select_streams', stream,
-        '-show_entries', 'format=%s' % prop,
-        '-of', 'default=noprint_wrappers=1:nokey=1',
-        '-v', 'quiet',
-        media_url
-        ],
-        check=True,
-        stdout=subprocess.PIPE
-    )
-    return float(process.stdout.decode())
-
-def duration(video_url):
-    if validators.url(video_url):
-        if video_url not in videos:
-            read_video(video_url)
-        return videos[video_url].duration
-    return property(video_url, 'v:0', 'duration')
-
-def frames_number(video_url):
-    return property(video_url, 'v:0', 'nb_frames')
-
 def read_videos():
     youtube_collections(args.videos, 'video')
     youtube_playlists(args.videos)
@@ -110,7 +86,8 @@ def labels_from_video(video_url):
     ]
 
 def update_labels():
-    pool = multiprocessing.pool.Pool(os.cpu_count())
+    pool_size = 1 if args.visual_filter_chrono else os.cpu_count()
+    pool = multiprocessing.pool.Pool(pool_size)
     result = [
         pool.apply_async(check_label, (i,))
         for i in range(len(labels.labels))
@@ -248,9 +225,15 @@ def next_input_start_point(n, input_duration, output_duration):
     speed = (
         args.visual_filter_chrono_speed
         if args.visual_filter_chrono_speed else 1 / len(labels.labels))
-    start = input_duration * (1 - scope) * speed * n % input_duration
+    start = max(
+        labels.labels[n - 1].output_final_point
+            if args.visual_filter_chrono and
+                n > 0 and
+                labels.labels[n - 1].output_final_point != -1
+            else 0,
+        input_duration * (1 - scope) * speed * n % input_duration)
     final = min(
-        start + input_duration * scope,
+        start + input_duration * scope - output_duration,
         input_duration - output_duration)
     return random.uniform(start, final)
 
@@ -268,10 +251,34 @@ def cache_input(l: Label, n):
         *(['-crf', '17'] if args.output_quality == 'high' else
             ['-crf', '33'] if args.output_quality == 'low' else []),
         *(['-preset', 'slow'] if args.output_quality == 'high' else
-            ['-preset', 'fast'] if args.output_quality == 'low' else []),
+            ['-preset', 'veryfast'] if args.output_quality == 'low' else []),
         *(['-tune', 'film'] if args.output_quality == 'high' else []),
         '-an',
         '-y', args.cache % (n + 1)
         ],
         check=True
     )
+
+def property(video_url, stream, prop):
+    process = subprocess.run([
+        'ffprobe',
+        '-select_streams', stream,
+        '-show_entries', 'format=%s' % prop,
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        '-v', 'quiet',
+        video_url
+        ],
+        check=True,
+        stdout=subprocess.PIPE
+    )
+    return float(process.stdout.decode())
+
+def duration(video_url):
+    if validators.url(video_url):
+        if video_url not in videos:
+            read_video(video_url)
+        return videos[video_url].duration
+    return property(video_url, 'v:0', 'duration')
+
+def frames_number(video_url):
+    return property(video_url, 'v:0', 'nb_frames')

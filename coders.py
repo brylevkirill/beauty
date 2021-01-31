@@ -58,18 +58,18 @@ def write_video_reencode():
             )) + [
         '-t', str(args.output_max_length or
             labels.labels[-1].output_final_point),
-        '-i', args.audio_output,
+        *(['-i', args.audio_output] if args.audio_output else []),
         '-filter_complex',
             ', '.join([concat_filter] + effects_filters) + '[v]',
         '-map', '[v]',
-        '-map', '%d:a' % len(labels.labels),
+        *(['-map', '%d:a' % len(labels.labels)] if args.audio_output else []),
         '-shortest',
         '-vsync', '2',
         '-flags', '+global_header',
         '-c:v', 'libx264',
         *(['-crf', '17'] if args.output_quality == 'high' else
             ['-crf', '33'] if args.output_quality == 'low' else []),
-        *(['-preset', 'veryslow'] if args.output_quality == 'high' else
+        *(['-preset', 'slow'] if args.output_quality == 'high' else
             ['-preset', 'veryfast'] if args.output_quality == 'low' else []),
         *(['-tune', 'film'] if args.output_quality == 'high' else []),
         '-c:a', 'libmp3lame',
@@ -259,12 +259,14 @@ def play_video_prepare():
 def play_video_prepare_args():
     sys.argv.remove('--play')
     sys.argv.append('--save')
-    if '--videos-max-number' not in sys.argv:
-        sys.argv.extend(['--videos-max-number', '1'])
+    if '--increment' not in sys.argv and '--reencode' not in sys.argv:
+        sys.argv.append('--reencode')
     if '--output-quality' not in sys.argv:
         sys.argv.extend(['--output-quality', 'low'])
     if '--output-format' not in sys.argv and args.output_format:
         sys.argv.extend(['--output-format', args.output_format])
+    if '--videos-max-number' not in sys.argv:
+        sys.argv.extend(['--videos-max-number', '1'])
     if '--loglevel' not in sys.argv:
         sys.argv.extend(['--loglevel', 'quiet'])
 

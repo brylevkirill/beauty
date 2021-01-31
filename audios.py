@@ -18,56 +18,6 @@ from beauty import args
 from labels import Label
 from youtube import youtube_collections, youtube_playlists, youtube_video
 
-def property(media_url, stream, prop):
-    process = subprocess.run([
-        'ffprobe',
-        '-select_streams', stream,
-        '-show_entries', 'format=%s' % prop,
-        '-of', 'default=noprint_wrappers=1:nokey=1',
-        '-v', 'quiet',
-        media_url
-        ],
-        check=True,
-        stdout=subprocess.PIPE
-    )
-    return float(process.stdout.decode())
-
-def duration(audio_url):
-    return property(audio_url, 'a:0', 'duration')
-
-def tempo(audio_file_name):
-    return tempo_from_chords(audio_file_name)
-
-def tempo_from_beats_madmom(audio_file_name):
-    proc = madmom.features.tempo.TempoEstimationProcessor(fps=100)
-    act = madmom.features.beats.RNNBeatProcessor()(audio_file_name)
-    return proc(act)[0][0]
-
-def tempo_from_beats_aubio(audio_file_name):
-    source = aubio_source(audio_file_name)
-    win_s, hop_s, samplerate = 1024, 512, 44100
-    tempi = aubio.tempo("specdiff", win_s, hop_s, samplerate)
-    beats = []
-    while True:
-        samples, read = source()
-        is_beat = tempi(samples)
-        if is_beat:
-            this_beat = tempi.get_last_s()
-            beats.append(this_beat)
-        if read < hop_s:
-            break
-    bpms = 60 / numpy.diff(beats)
-    return numpy.median(bpms)
-
-def tempo_from_chords(audio_file_name):
-    proc = madmom.features.chords.DeepChromaChordRecognitionProcessor()
-    feat = madmom.audio.chroma.DeepChromaProcessor()(audio_file_name)
-    intervals = [
-        (e - s - (e - s) % 0.01) for (s, e, _) in proc(feat)] or [
-        duration(audio_file_name)
-    ]
-    return 60 / collections.Counter(intervals).most_common(1)[0][0]
-
 def read_audios():
     youtube_collections(args.audios, 'audio')
     youtube_playlists(args.audios)
@@ -329,6 +279,56 @@ def points_from_onsets(audio_file_name):
         if read < source.hop_size:
             break
     return set(points)
+
+def property(audio_url, stream, prop):
+    process = subprocess.run([
+        'ffprobe',
+        '-select_streams', stream,
+        '-show_entries', 'format=%s' % prop,
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        '-v', 'quiet',
+        audio_url
+        ],
+        check=True,
+        stdout=subprocess.PIPE
+    )
+    return float(process.stdout.decode())
+
+def duration(audio_url):
+    return property(audio_url, 'a:0', 'duration')
+
+def tempo(audio_file_name):
+    return tempo_from_beats_madmom(audio_file_name)
+
+def tempo_from_beats_madmom(audio_file_name):
+    proc = madmom.features.tempo.TempoEstimationProcessor(fps=100)
+    act = madmom.features.beats.RNNBeatProcessor()(audio_file_name)
+    return proc(act)[0][0]
+
+def tempo_from_beats_aubio(audio_file_name):
+    source = aubio_source(audio_file_name)
+    win_s, hop_s, samplerate = 1024, 512, 44100
+    tempi = aubio.tempo("specdiff", win_s, hop_s, samplerate)
+    beats = []
+    while True:
+        samples, read = source()
+        is_beat = tempi(samples)
+        if is_beat:
+            this_beat = tempi.get_last_s()
+            beats.append(this_beat)
+        if read < hop_s:
+            break
+    bpms = 60 / numpy.diff(beats)
+    return numpy.median(bpms)
+
+def tempo_from_chords(audio_file_name):
+    proc = madmom.features.chords.DeepChromaChordRecognitionProcessor()
+    feat = madmom.audio.chroma.DeepChromaProcessor()(audio_file_name)
+    intervals = [
+        (e - s - (e - s) % 0.01) for (s, e, _) in proc(feat)] or [
+        duration(audio_file_name)
+    ]
+    return 60 / collections.Counter(intervals).most_common(1)[0][0]
 
 def aubio_source(audio_file_name):
     sound = pydub.AudioSegment.from_file(audio_file_name)
