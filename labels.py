@@ -44,20 +44,6 @@ def update_labels(new_labels):
                     labels[-1].output_start_point
             )
 
-def update_labels_serial(input_url):
-    L, t = [], 0
-    for l in labels:
-        dt = l.output_final_point - l.output_start_point
-        L.append(Label(
-            t,
-            t + dt,
-            input_url,
-            l.output_start_point,
-            l.output_final_point
-        ))
-        t += dt
-    labels[:] = L
-
 def update_labels_filter(source_labels, target_labels, timestamp):
     import datetime
     ts = datetime.datetime.utcfromtimestamp(timestamp)
@@ -80,6 +66,20 @@ def update_labels_filter(source_labels, target_labels, timestamp):
         )
     with open(target_labels, 'w') as f:
         f.writelines(lines)
+
+def update_labels_serial(input_url):
+    L, t = [], 0
+    for l in labels:
+        dt = l.output_final_point - l.output_start_point
+        L.append(Label(
+            t,
+            t + dt,
+            input_url,
+            l.output_start_point,
+            l.output_final_point
+        ))
+        t += dt
+    labels[:] = L
 
 def read_labels(custom_file_name=None):
     file_name = args.labels if custom_file_name is None else custom_file_name

@@ -223,21 +223,26 @@ def next_input_start_point(n, input_duration, output_duration):
             if args.visual_filter_chrono and args.visual_filter_chrono_scope
         else min(1.0, len(videos) / len(labels.labels))
             if args.visual_filter_chrono
-        else 1.0)
+        else 1
+    )
     speed = (
         args.visual_filter_chrono_speed
-        if args.visual_filter_chrono_speed else 1 / len(labels.labels))
-    start = max(
+            if args.visual_filter_chrono_speed
+        else 1 / len(labels.labels)
+    )
+    point = (0.5 + n) * speed * input_duration % input_duration
+    delta = 0.5 * max(scope * input_duration, output_duration)
+    start = (
         labels.labels[n - 1].output_final_point
-            if args.visual_filter_chrono and
-                n > 0 and
-                labels.labels[n - 1].output_final_point != -1
-            else 0,
-        input_duration * (1 - scope) * speed * n % input_duration)
-    final = min(
-        start + input_duration * scope - output_duration,
-        input_duration - output_duration)
-    return random.uniform(start, final)
+        if args.visual_filter_chrono and
+            n > 0 and
+            labels.labels[n - 1].output_final_point != -1
+        else 0
+    )
+    return random.uniform(
+        max(start, point - delta),
+        max(start, min(point + delta, input_duration) - output_duration)
+    )
 
 def cache_input(l: Label, n):
     if l.input_url not in videos:
