@@ -42,16 +42,18 @@ def write_video_reencode():
         for f in functions:
             y = f(y)
         return y
-    concat_filter = 'concat=n=%d:v=1:a=0' % len(labels.labels)
-    effects_filters, effects_mappers = visual_effects()
+    concat_filter = ['concat=n=%d:v=1:a=0' % len(labels.labels)]
+    effect_filter, effect_mapper = visual_effects()
+    rotate_filter = ['transpose=2'] if args.output_rotate else []
+    filters = concat_filter + effect_filter + rotate_filter
     subprocess.run([
         'ffmpeg',
         '-loglevel', args.loglevel] +
         list(itertools.chain.from_iterable([
             '-ss', str(l.input_start_point),
             '-t', '%.3f' % max(0,
-                apply(effects_mappers, l.output_final_point) -
-                apply(effects_mappers, l.output_start_point) +
+                apply(effect_mapper, l.output_final_point) -
+                apply(effect_mapper, l.output_start_point) +
                 args.offset_reencode),
             '-i', videos.videos[l.input_url].url
             ] for l in labels.labels
@@ -59,8 +61,7 @@ def write_video_reencode():
         '-t', str(args.output_max_length or
             labels.labels[-1].output_final_point),
         *(['-i', args.audio_output] if args.audio_output else []),
-        '-filter_complex',
-            ', '.join([concat_filter] + effects_filters) + '[v]',
+        '-filter_complex', ', '.join(filters) + '[v]',
         '-map', '[v]',
         *(['-map', '%d:a' % len(labels.labels)] if args.audio_output else []),
         '-shortest',

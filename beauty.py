@@ -45,6 +45,7 @@ def init_args():
     arg('--labels', type=str, metavar='<labels file>')
     arg('--labels-reinit')
     arg('--labels-public')
+    arg('--labels-serial')
 
     arg('--input', type=str, metavar='<video file>')
     arg('--input-labels', type=str, metavar='<labels file>')
@@ -66,6 +67,7 @@ def init_args():
     arg('--videos-format', type=str)
     arg('--videos-width', type=int)
     arg('--videos-height', type=int)
+    arg('--output-rotate')
     arg('--output-max-length', type=float)
     arg('--output-format', type=str)
     arg('--output-quality', type=str, choices=['high', 'medium', 'low'])
@@ -90,7 +92,7 @@ def init_args():
     arg('--labels-from-onsets-method', type=str,
         choices=['energy', 'hfc', 'complex', 'phase',
             'specdiff', 'kl', 'mkl', 'specflux'],
-        default='hfc')
+        default='specflux')
     arg('--labels-from-onsets-threshold', type=float, default=0.3)
     arg('--labels-from-onsets-min-length', type=float, default=0.02)
     arg('--labels-from-onsets-min-volume', type=float, default=-90)
@@ -99,7 +101,7 @@ def init_args():
     arg('--labels-joints', type=int, default=1)
     arg('--labels-splits', type=int, default=1)
 
-    arg('--visual-filter-retries', type=int, default=5)
+    arg('--visual-filter-retries', type=int, default=100)
     arg('--visual-filter-ordered')
     arg('--visual-filter-chrono')
     arg('--visual-filter-chrono-scope', type=float)
@@ -180,12 +182,16 @@ if __name__ == '__main__':
             labels.read_labels()
         else:
             if args.input_labels:
-                shutil.copyfile(args.input_labels, args.labels)
-                labels.read_labels()
+                labels.read_labels(args.input_labels)
             else:
-                if args.input and args.labels_from_input:
+                if args.labels_from_input:
+                    assert args.input
                     new_labels = videos.labels_from_video(args.input)
                     labels.update_labels(new_labels)
+            if args.labels_serial:
+                assert args.input
+                labels.update_labels_serial(args.input)
+            labels.write_labels()
         if args.audios:
             args.audios[:] = audios.read_audios()
             if not labels.labels:

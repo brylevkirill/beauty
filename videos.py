@@ -4,6 +4,7 @@ import os
 import random
 import re
 import subprocess
+import sys
 import typing
 import validators
 
@@ -89,14 +90,15 @@ def update_labels():
     pool_size = 1 if args.visual_filter_chrono else os.cpu_count()
     pool = multiprocessing.pool.Pool(pool_size)
     result = [
-        pool.apply_async(check_label, (i,))
-        for i in range(len(labels.labels))
+        pool.apply_async(check_label, (n,))
+        for n in range(len(labels.labels))
     ]
     pool.close()
     pool.join()
     assert all(r.get() is None for r in result)
 
 def check_label(n):
+    random.seed(n + random.randint(0, sys.maxsize))
     retries = 0
     while True:
         label, label_changed = update_label(n)
