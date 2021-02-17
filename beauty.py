@@ -7,22 +7,6 @@ import sys
 import urllib.parse
 import uuid
 
-# implemented functionality:
-# - reading audios & videos
-# - YT videos/lists/search
-# - reading/writing labels
-# - creating labels (audio) (analyzing audio track)
-# - creating labels (video) (analyzing video track)
-# - applying visual filters
-# - applying visual effects
-# - encoding/writing videos (reencoding/incremental)
-# - streaming created videos (video generation queue)
-# - playing created videos (video generation queue)
-# - editing created videos (picture-in-picture mode)
-
-# sample videos:
-# - https://youtube.com/playlist?list=PL659KIPAkeqh4xPJF2BaUClsliKemfN5K
-
 def init_args():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -106,6 +90,7 @@ def init_args():
     arg('--visual-filter-chrono')
     arg('--visual-filter-chrono-scope', type=float)
     arg('--visual-filter-chrono-speed', type=float)
+    arg('--visual-filter-chrono-whole')
     arg('--visual-filter-dark')
     arg('--visual-filter-cuts')
     arg('--visual-filter-cuts-prob', type=float, default=0.05)

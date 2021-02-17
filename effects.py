@@ -3,6 +3,7 @@ import math
 import scipy.optimize
 import warnings
 
+import labels
 from beauty import args
 from audios import tempo
 
@@ -42,15 +43,18 @@ def visual_effects_speedup_custom():
     mapping = [(
         labels.labels[i].output_start_point,
         labels.labels[i].output_final_point,
-        (i % 2) * 3 + 1
+        (labels.labels[i].input_final_point -
+            labels.labels[i].input_start_point) /
+        (labels.labels[i].output_final_point -
+            labels.labels[i].output_start_point)
         ) for i in range(len(labels.labels))
     ]
     inverse_mapping = []
     filter = '%s'
     time = 0
     for (start, final, speed) in mapping:
-        delta = (final - start) / speed
-        filter = filter % ('if(lt(T,%f),%f+(T-%f)/%f,%%s)' % (
+        delta = (final - start) * speed
+        filter = filter % ('if(lt(T,%f),%f+(T-%f)*%f,%%s)' % (
             time + delta,
             start,
             time,
@@ -62,8 +66,8 @@ def visual_effects_speedup_custom():
         time = 0
         for (start, final, speed) in inverse_mapping:
             if start <= y <= final:
-                return time + (y - start) * speed
-            time += (final - start) * speed
+                return time + (y - start) / speed
+            time += (final - start) / speed
         return time
     return filter, mapper
 

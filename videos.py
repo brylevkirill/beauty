@@ -35,7 +35,8 @@ def read_videos():
             args.videos.append(l.input_url)
     if not args.videos:
         raise Exception('No video file names or video URLs given.')
-    pool = multiprocessing.pool.ThreadPool(len(args.videos))
+    pool_size = 1 if args.visual_filter_chrono else len(args.videos)
+    pool = multiprocessing.pool.ThreadPool(pool_size)
     result = [pool.apply_async(read_video, (v, False)) for v in args.videos]
     pool.close()
     pool.join()
@@ -145,16 +146,22 @@ def update_label(n):
     if type(l.input_start_point) is not list:
         input_duration = l.input_final_point - l.input_start_point
         input_start_point = l.input_start_point if (
-            input_url is None or l.input_start_point >= 0) else (
+            input_url is None or
+            l.input_start_point >= 0) else (
             next_input_start_point(
                 n,
                 duration(input_url),
                 output_duration))
         input_final_point = l.input_final_point if (
             input_url is None or
-            l.input_start_point >= 0 and l.input_final_point >= 0 and
+            l.input_start_point >= 0 and
+            l.input_final_point >= 0 and
             abs(output_duration - input_duration) < 0.01) else (
-            input_start_point + output_duration)
+            next_input_final_point(
+                n,
+                duration(input_url),
+                output_duration,
+                input_start_point))
     else:
         if type(l.input_final_point) is not list:
             i = random.randint(0, len(l.input_start_point) - 1)
@@ -216,7 +223,12 @@ def next_input_url(n):
                 break
         return url
 
-def next_input_start_point(n, input_duration, output_duration):
+def next_input_start_point(
+    n,
+    input_duration,
+    output_duration):
+    if args.visual_filter_chrono_whole:
+        return 0
     assert input_duration >= output_duration
     scope = (
         args.visual_filter_chrono_scope
@@ -236,6 +248,7 @@ def next_input_start_point(n, input_duration, output_duration):
         labels.labels[n - 1].output_final_point
         if args.visual_filter_chrono and
             n > 0 and
+            labels.labels[n - 1].input_url == labels.labels[n].input_url and
             labels.labels[n - 1].output_final_point != -1
         else 0
     )
@@ -243,6 +256,15 @@ def next_input_start_point(n, input_duration, output_duration):
         max(start, point - delta),
         max(start, min(point + delta, input_duration) - output_duration)
     )
+
+def next_input_final_point(
+    n,
+    input_duration,
+    output_duration,
+    input_start_point):
+    if args.visual_filter_chrono_whole:
+        return input_duration
+    return input_start_point + output_duration
 
 def cache_input(l: Label, n):
     if l.input_url not in videos:
@@ -254,7 +276,7 @@ def cache_input(l: Label, n):
         '-t', str(l.input_final_point - l.input_start_point +
             args.offset_increment),
         '-i', videos[l.input_url].url,
-        '-c:v', 'libx264',
+        '-codec:v', 'libx264',
         *(['-crf', '17'] if args.output_quality == 'high' else
             ['-crf', '33'] if args.output_quality == 'low' else []),
         *(['-preset', 'slow'] if args.output_quality == 'high' else
@@ -266,11 +288,11 @@ def cache_input(l: Label, n):
         check=True
     )
 
-def property(video_url, stream, prop):
+def property(video_url, stream, name):
     process = subprocess.run([
         'ffprobe',
         '-select_streams', stream,
-        '-show_entries', 'format=%s' % prop,
+        '-show_entries', 'format=%s' % name,
         '-of', 'default=noprint_wrappers=1:nokey=1',
         '-v', 'quiet',
         video_url

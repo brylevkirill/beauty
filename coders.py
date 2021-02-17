@@ -65,15 +65,15 @@ def write_video_reencode():
         '-map', '[v]',
         *(['-map', '%d:a' % len(labels.labels)] if args.audio_output else []),
         '-shortest',
-        '-vsync', '2',
+        '-vsync', 'vfr',
         '-flags', '+global_header',
-        '-c:v', 'libx264',
+        '-codec:v', 'libx264',
         *(['-crf', '17'] if args.output_quality == 'high' else
             ['-crf', '33'] if args.output_quality == 'low' else []),
         *(['-preset', 'slow'] if args.output_quality == 'high' else
             ['-preset', 'veryfast'] if args.output_quality == 'low' else []),
         *(['-tune', 'film'] if args.output_quality == 'high' else []),
-        '-c:a', 'libmp3lame',
+        '-codec:a', 'libmp3lame',
         '-f', 'tee',
         '|'.join(
             ('[f=%s]' % args.output_format if args.output_format else '') +
@@ -93,7 +93,7 @@ def write_video_increment():
         '-f', 'concat',
         '-safe', '0',
         '-i', 'pipe:',
-        '-c:v', 'copy',
+        '-codec:v', 'copy',
         '-an',
         '-y',
         args.video_output
@@ -144,7 +144,7 @@ def write_video_mixed_increment(labels_before):
         '-f', 'concat',
         '-safe', '0',
         '-i', 'pipe:',
-        '-c:v', 'copy',
+        '-codec:v', 'copy',
         '-an',
         '-y',
         args.video_output
@@ -188,8 +188,8 @@ def write_video_with_audio():
         '-t', str(args.output_max_length or
             labels.labels[-1].output_final_point),
         '-i', args.audio_output,
-        '-c:v', 'copy',
-        '-c:a', 'libmp3lame',
+        '-codec:v', 'copy',
+        '-codec:a', 'libmp3lame',
         '-f', args.output_format,
         '-y',
         args.output[0] if args.output else output
