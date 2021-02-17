@@ -266,7 +266,7 @@ def play_video_prepare_args():
         sys.argv.extend(['--output-quality', 'low'])
     if '--output-format' not in sys.argv and args.output_format:
         sys.argv.extend(['--output-format', args.output_format])
-    if '--videos-max-number' not in sys.argv:
+    if '--videos-max-number' not in sys.argv and len(args.videos) <= 1:
         sys.argv.extend(['--videos-max-number', '1'])
     if '--loglevel' not in sys.argv:
         sys.argv.extend(['--loglevel', 'quiet'])

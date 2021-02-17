@@ -35,8 +35,7 @@ def read_videos():
             args.videos.append(l.input_url)
     if not args.videos:
         raise Exception('No video file names or video URLs given.')
-    pool_size = 1 if args.visual_filter_chrono else len(args.videos)
-    pool = multiprocessing.pool.ThreadPool(pool_size)
+    pool = multiprocessing.pool.ThreadPool(len(args.videos))
     result = [pool.apply_async(read_video, (v, False)) for v in args.videos]
     pool.close()
     pool.join()
@@ -100,7 +99,7 @@ def update_labels():
 
 def check_label(n):
     random.seed(n + random.randint(0, sys.maxsize))
-    retries = 0
+    retries = args.visual_filter_retries
     while True:
         label, label_changed = update_label(n)
         if not label_changed:
@@ -119,17 +118,13 @@ def check_label(n):
                 url=args.cache % (n + 1),
                 duration=duration
             )
-            if visual_filter(cache_label, cache_video.url):
-                labels.labels[n] = label
-                break
+            accept = visual_filter(cache_label, cache_video.url)
         else:
-            if visual_filter(label, videos[label.input_url].url):
-                labels.labels[n] = label
-                break
-        retries += 1
-        if retries >= args.visual_filter_retries:
+            accept = visual_filter(label, videos[label.input_url].url)
+        if accept or retries == 0:
             labels.labels[n] = label
             break
+        retries -= 1
     if label_changed:
         write_labels()
     if args.increment and not os.path.isfile(args.cache % (n + 1)):
@@ -137,58 +132,30 @@ def check_label(n):
 
 def update_label(n):
     l = labels.labels[n]
+    output_duration = l.output_final_point - l.output_start_point
     input_url = l.input_url if (
         l.input_url is not None and (
         os.path.isfile(l.input_url) or
         validators.url(l.input_url))) else (
         next_input_url(n))
-    output_duration = l.output_final_point - l.output_start_point
-    if type(l.input_start_point) is not list:
-        input_duration = l.input_final_point - l.input_start_point
-        input_start_point = l.input_start_point if (
-            input_url is None or
-            l.input_start_point >= 0) else (
-            next_input_start_point(
-                n,
-                duration(input_url),
-                output_duration))
-        input_final_point = l.input_final_point if (
-            input_url is None or
-            l.input_start_point >= 0 and
-            l.input_final_point >= 0 and
-            abs(output_duration - input_duration) < 0.01) else (
-            next_input_final_point(
-                n,
-                duration(input_url),
-                output_duration,
-                input_start_point))
-    else:
-        if type(l.input_final_point) is not list:
-            i = random.randint(0, len(l.input_start_point) - 1)
-            input_start_point = l.input_start_point[i]
-        else:
-            assert len(l.input_start_point) == len(l.input_final_point)
-            position = next_input_start_point(
-                n, 
-                sum(l.input_final_point[i] - l.input_start_point[i]
-                    for i in range(len(l.input_start_point))
-                    if l.input_final_point[i] - l.input_start_point[i] >=
-                        output_duration),
-                output_duration)
-            for i in range(len(l.input_start_point)):
-                input_duration = l.input_final_point[i] - l.input_start_point[i]
-                if input_duration >= output_duration:
-                    if position <= input_duration:
-                        break
-                    else:
-                        position -= input_duration
-            input_start_point = l.input_start_point[i] + position if (
-                l.input_start_point[i] + position <
-                    l.input_final_point[i] - output_duration) else (
-                random.uniform(
-                    l.input_start_point[i],
-                    l.input_final_point[i] - output_duration))
-        input_final_point = input_start_point + output_duration
+    input_duration = l.input_final_point - l.input_start_point
+    input_start_point = l.input_start_point if (
+        input_url is None or
+        l.input_start_point >= 0) else (
+        next_input_start_point(
+            n,
+            duration(input_url),
+            output_duration))
+    input_final_point = l.input_final_point if (
+        input_url is None or
+        l.input_start_point >= 0 and
+        l.input_final_point >= 0 and
+        abs(output_duration - input_duration) < 0.01) else (
+        next_input_final_point(
+            n,
+            duration(input_url),
+            output_duration,
+            input_start_point))
     label_changed = (
         input_url != l.input_url or
         input_start_point != l.input_start_point or
@@ -225,11 +192,11 @@ def next_input_url(n):
 
 def next_input_start_point(
     n,
-    input_duration,
+    source_duration,
     output_duration):
     if args.visual_filter_chrono_whole:
         return 0
-    assert input_duration >= output_duration
+    assert source_duration >= output_duration
     scope = (
         args.visual_filter_chrono_scope
             if args.visual_filter_chrono and args.visual_filter_chrono_scope
@@ -242,8 +209,8 @@ def next_input_start_point(
             if args.visual_filter_chrono_speed
         else 1 / len(labels.labels)
     )
-    point = (0.5 + n) * speed * input_duration % input_duration
-    delta = 0.5 * max(scope * input_duration, output_duration)
+    point = (0.5 + n) * speed * source_duration % source_duration
+    delta = 0.5 * max(scope * source_duration, output_duration)
     start = (
         labels.labels[n - 1].output_final_point
         if args.visual_filter_chrono and
@@ -254,16 +221,16 @@ def next_input_start_point(
     )
     return random.uniform(
         max(start, point - delta),
-        max(start, min(point + delta, input_duration) - output_duration)
+        max(start, min(point + delta, source_duration) - output_duration)
     )
 
 def next_input_final_point(
     n,
-    input_duration,
+    source_duration,
     output_duration,
     input_start_point):
     if args.visual_filter_chrono_whole:
-        return input_duration
+        return source_duration
     return input_start_point + output_duration
 
 def cache_input(l: Label, n):
