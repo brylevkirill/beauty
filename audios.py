@@ -6,7 +6,6 @@ import madmom.features.beats
 import madmom.features.chords
 import madmom.features.notes
 import numpy
-import os
 import pydub
 import random
 import shutil
@@ -280,11 +279,11 @@ def points_from_onsets(audio_file_name):
             break
     return set(points)
 
-def property(audio_url, stream, prop):
+def property(audio_url, stream, name):
     process = subprocess.run([
         'ffprobe',
         '-select_streams', stream,
-        '-show_entries', 'format=%s' % prop,
+        '-show_entries', 'format=%s' % name,
         '-of', 'default=noprint_wrappers=1:nokey=1',
         '-v', 'quiet',
         audio_url

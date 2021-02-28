@@ -11,9 +11,9 @@ from labels import Label
 
 def visual_filter(label: Label, video):
     filters = [
-        visual_filter_dark,
-        visual_filter_cuts,
         visual_filter_pace,
+        visual_filter_cuts,
+        visual_filter_dark,
         visual_filter_face,
         visual_filter_word
     ]
@@ -42,28 +42,6 @@ def visual_filter_base(label: Label, video, filter_expr, filter_func):
     )
     return filter_func(process.stderr.decode())
 
-def visual_filter_dark(label: Label, video):
-    return visual_filter_base(
-        label,
-        video,
-        'blackframe',
-        lambda x: 'pblack:' not in x)
-
-def visual_filter_cuts_base(label: Label, video):
-    filter_expr = ('select=\'gt(scene,%f)\',showinfo' %
-        args.visual_filter_cuts_prob)
-    def filter_func(x):
-        return (float(s.split('pts_time:')[1].split()[0])
-            for s in x.splitlines() if 'pts_time:' in s)
-    return visual_filter_base(
-        label,
-        video,
-        filter_expr,
-        filter_func)
-
-def visual_filter_cuts(label: Label, video):
-    return next(iter(visual_filter_cuts_base(label, video)), None) is None
-
 def visual_filter_pace(label: Label, video):
     filter_expr = ('select=\'gt(scene,%f)\',showinfo' %
         args.visual_filter_pace_prob)
@@ -79,6 +57,30 @@ def visual_filter_pace(label: Label, video):
         video,
         filter_expr,
         filter_func)
+
+def visual_filter_cuts_base(label: Label, video):
+    filter_expr = ('select=\'gt(scene,%f)\',showinfo' %
+        args.visual_filter_cuts_prob)
+    def filter_func(x):
+        return (float(s.split('pts_time:')[1].split()[0])
+            for s in x.splitlines() if 'pts_time:' in s)
+    return visual_filter_base(
+        label,
+        video,
+        filter_expr,
+        filter_func)
+
+def visual_filter_cuts(label: Label, video):
+    cuts = next(iter(visual_filter_cuts_base(label, video)), None)
+    return bool(cuts) == (args.visual_filter_cuts == 'include')
+
+def visual_filter_dark(label: Label, video):
+    dark = visual_filter_base(
+        label,
+        video,
+        'blackframe',
+        lambda x: 'pblack:' in x)
+    return bool(dark) == (args.visual_filter_dark == 'include')
 
 def frame(label: Label, video, color):
     temp_file = tempfile.NamedTemporaryFile(suffix='.png')
@@ -97,11 +99,9 @@ def frame(label: Label, video, color):
     return image
 
 def visual_filter_face(label: Label, video):
-    return (
-        bool(dlib.get_frontal_face_detector()(
-            frame(label, video, cv2.COLOR_BGR2RGB)))
-        == (args.visual_filter_face == 'include')
-    )
+    face = dlib.get_frontal_face_detector()(
+        frame(label, video, cv2.COLOR_BGR2RGB))
+    return bool(face) == (args.visual_filter_face == 'include')
 
 def visual_filter_word(label: Label, video):
     image = frame(label, video, cv2.COLOR_BGR2GRAY)

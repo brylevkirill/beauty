@@ -2,7 +2,6 @@ import argparse
 import multiprocessing
 import os
 import random
-import shutil
 import sys
 import urllib.parse
 import uuid
@@ -91,14 +90,14 @@ def init_args():
     arg('--visual-filter-chrono-scope', type=float)
     arg('--visual-filter-chrono-speed', type=float)
     arg('--visual-filter-chrono-whole')
-    arg('--visual-filter-dark')
-    arg('--visual-filter-cuts')
-    arg('--visual-filter-cuts-prob', type=float, default=0.05)
     arg('--visual-filter-pace', type=str, choices=['fast', 'slow'])
     arg('--visual-filter-pace-prob', type=float, default=0.02)
     arg('--visual-filter-pace-rate', type=float, default=0.2)
-    arg('--visual-filter-face', type=str, choices=['include', 'exclude'])
-    arg('--visual-filter-word', type=str, choices=['include', 'exclude'])
+    arg('--visual-filter-cuts', type=str, choices=['exclude', 'include'])
+    arg('--visual-filter-cuts-prob', type=float, default=0.05)
+    arg('--visual-filter-dark', type=str, choices=['exclude', 'include'])
+    arg('--visual-filter-face', type=str, choices=['exclude', 'include'])
+    arg('--visual-filter-word', type=str, choices=['exclude', 'include'])
 
     arg('--visual-effect-speedup')
     arg('--visual-effect-speedup-freq', type=float, default=1)
