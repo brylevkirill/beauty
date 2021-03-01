@@ -87,8 +87,7 @@ def labels_from_video(video_url):
     ]
 
 def update_labels():
-    pool_size = 1 if args.visual_filter_chrono else os.cpu_count()
-    pool = multiprocessing.pool.Pool(pool_size)
+    pool = multiprocessing.pool.Pool(args.visual_filter_threads)
     result = [
         pool.apply_async(check_label, (n,))
         for n in range(len(labels.labels))
@@ -194,26 +193,29 @@ def next_input_start_point(
     n,
     source_duration,
     output_duration):
-    if args.visual_filter_chrono_whole:
+    if args.visual_filter_chrono_mapper:
         return 0
     assert source_duration >= output_duration
-    scope = (
-        args.visual_filter_chrono_scope
-            if args.visual_filter_chrono and args.visual_filter_chrono_scope
-        else min(1.0, len(videos) / len(labels.labels))
-            if args.visual_filter_chrono
-        else 1
-    )
     speed = (
         args.visual_filter_chrono_speed
             if args.visual_filter_chrono_speed
-        else 1 / len(labels.labels)
+        else (1 / len(labels.labels) *
+            args.visual_filter_chrono_speed_factor)
+    )
+    scope = (
+        args.visual_filter_chrono_scope
+            if args.visual_filter_chrono_scope
+        else min(1,
+            len(videos) / len(labels.labels) *
+                args.visual_filter_chrono_scope_factor)
+            if args.visual_filter_chrono
+        else 1
     )
     point = (0.5 + n) * speed * source_duration % source_duration
     delta = 0.5 * max(scope * source_duration, output_duration)
     start = (
         labels.labels[n - 1].output_final_point
-        if args.visual_filter_chrono and
+        if args.visual_filter_chrono_serial and
             n > 0 and
             labels.labels[n - 1].input_url == labels.labels[n].input_url and
             labels.labels[n - 1].output_final_point != -1
@@ -229,7 +231,7 @@ def next_input_final_point(
     source_duration,
     output_duration,
     input_start_point):
-    if args.visual_filter_chrono_whole:
+    if args.visual_filter_chrono_mapper:
         return source_duration
     return input_start_point + output_duration
 

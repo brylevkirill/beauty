@@ -134,14 +134,14 @@ def create_labels():
             p for p in points
             if p < args.output_max_length
             ] + [args.output_max_length]
-    if args.labels_joints > 1:
-        points[:] = points[::args.labels_joints]
-    if args.labels_splits > 1:
+    if args.labels_joints and args.labels_joints > 1:
+        points[:] = points[:-1:args.labels_joints] + [points[-1]]
+    if args.labels_splits and args.labels_splits > 1:
         points[:] = [
             points[i] + (points[i + 1] - points[i]) * j / args.labels_splits
             for i in range(len(points) - 1)
             for j in range(args.labels_splits)
-        ]
+        ] + [points[-1]]
     if args.labels_max_length:
         points[:] = [
             points[i] + j * args.labels_max_length
@@ -196,7 +196,8 @@ def points_from_beats(audio_file_name):
         not args.labels_from_beats_tracking and
         not args.labels_from_beats_tracking_dbn):
         args.labels_from_beats_tracking = True
-        args.labels_joints = 4
+        if not args.labels_joints:
+            args.labels_joints = 4
     proc = []
     if args.labels_from_beats_detection:
         proc.append(madmom.features.beats.BeatDetectionProcessor(
