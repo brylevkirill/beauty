@@ -35,11 +35,11 @@ def init_args():
 
     arg('--play')
     arg('--save')
-    arg('--loop')
     arg('--time', type=float, default=3600)
-    arg('--queue', type=int, default=1)
-    arg('--queue-delay', type=float, default=0.333)
+    arg('--noloop')
     arg('--nowait')
+    arg('--queue', type=int, default=2)
+    arg('--queue-delay', type=float, default=0.333)
     arg('--cache-delay', type=float, default=0.1)
     arg('--cache-limit', type=str, default='1M')
 
@@ -105,7 +105,6 @@ def init_args():
 
     arg('--visual-effect-speedup')
     arg('--visual-effect-speedup-freq', type=float, default=1)
-    arg('--visual-effect-zooming')
 
     arg('--loglevel', type=str,
         choices=['quiet', 'repeat+level+warning', 'repeat+level+verbose'],
@@ -145,9 +144,6 @@ def init_args():
         args.labels_reinit = True
     if not args.reencode and not args.increment:
         args.increment = True
-    args.visual_effect = (
-        args.visual_effect_speedup or
-        args.visual_effect_zooming)
 
 if __name__ == '__main__':
     init_args()
@@ -175,8 +171,8 @@ if __name__ == '__main__':
             else:
                 if args.labels_from_input:
                     assert args.input
-                    new_labels = videos.labels_from_video(args.input)
-                    labels.update_labels(new_labels)
+                    created_labels = videos.labels_from_video(args.input)
+                    labels.update_labels(created_labels)
             if args.labels_serial:
                 assert args.input
                 labels.update_labels_serial(args.input)
@@ -185,14 +181,15 @@ if __name__ == '__main__':
             args.audios[:] = audios.read_audios()
             if not labels.labels:
                 if args.labels_public:
-                    new_labels = youtube.obtain_labels(args.audios[0])
-                if not args.labels_public or not new_labels:
-                    new_labels = audios.create_labels()
-                labels.update_labels(new_labels)
+                    created_labels = youtube.obtain_labels(args.audios[0])
+                if not args.labels_public or not created_labels:
+                    created_labels = audios.create_labels()
+                labels.update_labels(created_labels)
                 labels.write_labels()
-        labels_before = list(labels.labels)
+        initial_labels = list(labels.labels)
         if args.videos:
             videos.read_videos()
-            videos.update_labels()
-        labels.write_labels()
-        coders.write_video(labels_before)
+            created_labels = videos.create_labels()
+            labels.update_labels(created_labels)
+            labels.write_labels()
+        coders.write_video(initial_labels)

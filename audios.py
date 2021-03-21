@@ -28,7 +28,7 @@ def read_audios():
             shutil.copyfile(audio, args.audio_output)
             break
         else:
-            if args.labels_reinit or args.visual_effect:
+            if args.labels_reinit or args.visual_effect_speedup:
                 if read_audio(audio):
                     break
             else:
@@ -43,13 +43,13 @@ def read_audios():
                         break
     return [audio]
 
-def read_audio(media_url):
-    if not fetch_audio(media_url, args.audio_output):
+def read_audio(audio_url):
+    if not fetch_audio(audio_url, args.audio_output):
         return False
     shape_audio(args.audio_output, length=args.output_max_length)
     return True
 
-def fetch_audio(media_url, audio_file_name):
+def fetch_audio(audio_url, audio_file_name):
     try:
         process = subprocess.run([
             'youtube-dl',
@@ -57,7 +57,7 @@ def fetch_audio(media_url, audio_file_name):
             '--no-continue',
             '--extract-audio',
             '--audio-format', 'm4a',
-            media_url,
+            audio_url,
             '-o',
             audio_file_name
             ],

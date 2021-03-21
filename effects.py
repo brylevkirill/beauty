@@ -11,8 +11,6 @@ def visual_effects():
     effects = []
     if args.visual_effect_speedup:
         effects.append(visual_effects_speedup_cosine)
-    if args.visual_effect_zooming:
-        effects.append(visual_effects_zooming)
     filters = []
     mappers = []
     for e in effects:
@@ -70,7 +68,3 @@ def visual_effects_speedup_custom():
             time += (final - start) / speed
         return time
     return filter, mapper
-
-def visual_effects_zooming():
-    return '', lambda x: x
-    ...

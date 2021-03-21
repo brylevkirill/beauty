@@ -2,10 +2,8 @@ import inspect
 import itertools
 import os
 import shutil
-import signal
 import subprocess
 import sys
-import urllib.parse
 import uuid
 
 import labels
@@ -15,11 +13,11 @@ from labels import labels_created, update_labels_filter
 from videos import read_video
 from effects import visual_effects
 
-def write_video(labels_before):
+def write_video(initial_labels):
     if not labels_created():
         return
     if args.reencode and args.increment:
-        write_video_mixed(labels_before)
+        write_video_mixed(initial_labels)
     elif args.reencode:
         write_video_reencode()
     elif args.increment:
@@ -109,11 +107,11 @@ def write_video_increment():
     if process.returncode != 0:
         raise Exception(errors)
 
-def write_video_mixed(labels_before):
+def write_video_mixed(initial_labels):
     if not os.path.isfile(output):
         write_video_mixed_reencode()
     else:
-        write_video_mixed_increment(labels_before)
+        write_video_mixed_increment(initial_labels)
 
 def write_video_mixed_reencode():
     process = subprocess.run([
@@ -130,9 +128,9 @@ def write_video_mixed_reencode():
         check=True
     )
 
-def write_video_mixed_increment(labels_before):
+def write_video_mixed_increment(initial_labels):
     labels_delta = sorted(
-        set(labels.labels) - set(labels_before),
+        set(labels.labels) - set(initial_labels),
         key=lambda t: t[0]
     )
     if not labels_delta:
@@ -198,10 +196,12 @@ def write_video_with_audio():
     )
 
 def play_video():
-    play_video_prepare()
+    argv = play_video_prepare_args()
+    if args.input_labels:
+        play_video_prepare_edit()
     video = '%d.' + output
     delay = args.output_max_length if args.output_max_length else 60
-    tasks = int(args.time / delay) if args.loop else 1
+    tasks = int(args.time / delay) if not args.noloop else 1
     if args.queue == 1:
         args.queue_delay = 0
     global player_config
@@ -225,7 +225,7 @@ def play_video():
                                 replace('(', '\\(').
                                 replace(')', '\\)').
                                 replace('&', '\\&')
-                            for arg in sys.argv + [
+                            for arg in argv + [
                                 '--output-id', str(id),
                                 '--output', '-'] + [
                                     target for target in args.output
@@ -252,24 +252,21 @@ def play_video():
     os.system(command)
     play_video_cleanup()
 
-def play_video_prepare():
-    play_video_prepare_args()
-    if args.input_labels:
-        play_video_prepare_edit()
-
 def play_video_prepare_args():
-    sys.argv.remove('--play')
-    sys.argv.append('--save')
-    if '--increment' not in sys.argv and '--reencode' not in sys.argv:
-        sys.argv.append('--reencode')
+    argv = list(sys.argv)
+    argv.remove('--play')
+    argv.append('--save')
+    if '--reencode' not in sys.argv and '--increment' not in sys.argv:
+        argv.append('--reencode')
     if '--output-quality' not in sys.argv:
-        sys.argv.extend(['--output-quality', 'low'])
+        argv.extend(['--output-quality', 'low'])
     if '--output-format' not in sys.argv and args.output_format:
-        sys.argv.extend(['--output-format', args.output_format])
+        argv.extend(['--output-format', args.output_format])
     if '--videos-max-number' not in sys.argv and len(args.videos) <= 1:
-        sys.argv.extend(['--videos-max-number', '1'])
+        argv.extend(['--videos-max-number', '1'])
     if '--loglevel' not in sys.argv:
-        sys.argv.extend(['--loglevel', 'quiet'])
+        argv.extend(['--loglevel', 'quiet'])
+    return argv
 
 def play_video_prepare_edit():
     global player_config

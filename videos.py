@@ -86,21 +86,21 @@ def labels_from_video(video_url):
         for i in range(len(points) - 1)
     ]
 
-def update_labels():
+def create_labels():
     pool = multiprocessing.pool.Pool(args.visual_filter_threads)
     result = [
-        pool.apply_async(check_label, (n,))
+        pool.apply_async(create_label, (n,))
         for n in range(len(labels.labels))
     ]
     pool.close()
     pool.join()
-    assert all(r.get() is None for r in result)
+    return [r.get() for r in result]
 
-def check_label(n):
+def create_label(n):
     random.seed(n + random.randint(0, sys.maxsize))
     retries = args.visual_filter_retries
     while True:
-        label, label_changed = update_label(n)
+        label, label_changed = change_label(n)
         if not label_changed:
             break
         if args.increment:
@@ -127,9 +127,10 @@ def check_label(n):
     if label_changed:
         write_labels()
     if args.increment and not os.path.isfile(args.cache % (n + 1)):
-        cache_input(labels.labels[n], n)
+        cache_input(label, n)
+    return label
 
-def update_label(n):
+def change_label(n):
     l = labels.labels[n]
     output_duration = l.output_final_point - l.output_start_point
     input_url = l.input_url if (
