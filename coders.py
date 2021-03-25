@@ -1,14 +1,16 @@
 import inspect
 import itertools
 import os
+import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import uuid
 
 import labels
 import videos
-from beauty import args, output
+from beauty import args, output, stream
 from labels import labels_created, update_labels_filter
 from videos import read_video
 from effects import visual_effects
@@ -46,8 +48,9 @@ def write_video_reencode():
     filters = concat_filter + effect_filter + rotate_filter
     subprocess.run([
         'ffmpeg',
-        '-loglevel', args.loglevel] +
-        list(itertools.chain.from_iterable([
+        '-loglevel', args.loglevel,
+        *(['-re'] if stream else []),
+        *list(itertools.chain.from_iterable([
             '-ss', str(l.input_start_point),
             '-t', '%.3f' % max(0,
                 apply(effect_mapper, l.output_final_point) -
@@ -55,7 +58,7 @@ def write_video_reencode():
                 args.offset_reencode),
             '-i', videos.videos[l.input_url].url
             ] for l in labels.labels
-            )) + [
+            )),
         '-t', str(args.output_max_length or
             labels.labels[-1].output_final_point),
         *(['-i', args.audio_output] if args.audio_output else []),
@@ -73,6 +76,7 @@ def write_video_reencode():
         *(['-tune', 'film'] if args.output_quality == 'high' else []),
         '-codec:a', 'libmp3lame',
         '-f', 'tee',
+        '-use_fifo', '1',
         '|'.join(
             ('[f=%s]' % args.output_format if args.output_format else '') +
             (target if target != '-' else 'pipe:1')
@@ -180,17 +184,25 @@ def write_video_with_audio():
     subprocess.run([
         'ffmpeg',
         '-loglevel', args.loglevel,
+        *(['-re'] if stream else []),
         '-t', str(args.output_max_length or
             labels.labels[-1].output_final_point),
         '-i', args.video_output,
         '-t', str(args.output_max_length or
             labels.labels[-1].output_final_point),
         '-i', args.audio_output,
+        '-map', '0:v',
+        '-map', '1:a',
         '-codec:v', 'copy',
         '-codec:a', 'libmp3lame',
-        '-f', args.output_format,
-        '-y',
-        args.output[0] if args.output else output
+        '-f', 'tee',
+        '-use_fifo', '1',
+        '|'.join(
+            ('[f=%s]' % args.output_format if args.output_format else '') +
+            (target if target != '-' else 'pipe:1')
+            for target in (args.output if args.output else [output])
+        ),
+        '-y'
         ],
         check=True
     )
@@ -205,7 +217,7 @@ def play_video():
     if args.queue == 1:
         args.queue_delay = 0
     global player_config
-    command = ('bash -c \"mpv ' +
+    command = ('mpv ' +
         ('--input-conf=\'{}\' '.format(player_config)
             if args.input else '') +
         '--cache=yes ' \
@@ -219,12 +231,10 @@ def play_video():
                         if args.nowait else '') +
                     'parallel --fg --ungroup --semaphore ' \
                         '-j{} '.format(args.queue) +
-                    'python \\\'{}\\\''.format(
-                        '\\\' \\\''.join(
-                            arg.replace(' ', '\\ ').
-                                replace('(', '\\(').
-                                replace(')', '\\)').
-                                replace('&', '\\&')
+                    'python "{}"'.format(
+                        '" "'.join(
+                            re.sub('"', r'\\\\\\"',
+                                re.sub("([' ()&])", r'\\\1', arg))
                             for arg in argv + [
                                 '--output-id', str(id),
                                 '--output', '-'] + [
@@ -235,8 +245,9 @@ def play_video():
                                     args.subtitles_output % id
                                 ] if args.subtitles else [])
                         )) +
-                    '| (pv -qSs 1; sleep {}; pv -qCB {}; cat) '.format(
-                        args.cache_delay * delay, args.cache_limit) +
+                    ('| (pv -qSs 1; sleep {}; pv -qCB {}; cat) '.format(
+                        args.cache_delay * delay, args.cache_limit)
+                        if args.cache_delay else '') +
                 ') ' +
                 ('--sub-file=\'{}\' '.format(args.subtitles_output % id)
                     if args.subtitles else '') +
@@ -248,23 +259,27 @@ def play_video():
             '--} '
             for i in range(tasks)
             for id in [uuid.uuid1()]
-        ) + '"')
-    os.system(command)
+        ))
+    with tempfile.NamedTemporaryFile(suffix='.sh') as temp_file:
+        temp_file.write(command.encode())
+        temp_file.flush()
+        os.system(f'bash "{temp_file.name}"')
     play_video_cleanup()
 
 def play_video_prepare_args():
     argv = list(sys.argv)
     argv.remove('--play')
-    argv.append('--save')
-    if '--reencode' not in sys.argv and '--increment' not in sys.argv:
-        argv.append('--reencode')
-    if '--output-quality' not in sys.argv:
+    if '--save' not in argv:
+        argv.append('--save')
+    if '--reencode' not in argv and '--increment' not in argv:
+        argv.append('--increment')
+    if '--output-quality' not in argv:
         argv.extend(['--output-quality', 'low'])
-    if '--output-format' not in sys.argv and args.output_format:
+    if '--output-format' not in argv and args.output_format:
         argv.extend(['--output-format', args.output_format])
-    if '--videos-max-number' not in sys.argv and len(args.videos) <= 1:
+    if '--videos-max-number' not in argv and len(args.videos) <= 1:
         argv.extend(['--videos-max-number', '1'])
-    if '--loglevel' not in sys.argv:
+    if '--loglevel' not in argv:
         argv.extend(['--loglevel', 'quiet'])
     return argv
 

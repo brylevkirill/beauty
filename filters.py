@@ -96,6 +96,7 @@ def frame(label: Label, video, color):
         check=True
     )
     image = cv2.cvtColor(cv2.imread(temp_file.name), color)
+    temp_file.close()
     return image
 
 def visual_filter_face(label: Label, video):

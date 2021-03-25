@@ -40,7 +40,7 @@ def init_args():
     arg('--nowait')
     arg('--queue', type=int, default=2)
     arg('--queue-delay', type=float, default=0.333)
-    arg('--cache-delay', type=float, default=0.1)
+    arg('--cache-delay', type=float)
     arg('--cache-limit', type=str, default='1M')
 
     arg('--reencode')
@@ -126,10 +126,10 @@ def init_args():
         args.videos_height = 1080
     if not args.videos_format:
         args.videos_format = 'mp4'
+    beauty.stream = any(
+        bool(urllib.parse.urlparse(item).scheme) for item in args.output)
     if not args.output_format:
-        stream_output = any(
-            bool(urllib.parse.urlparse(item).scheme) for item in args.output)
-        args.output_format = 'flv' if stream_output or args.play else 'mp4'
+        args.output_format = 'flv' if beauty.stream or args.play else 'mp4'
     args.labels = output + '.txt' if not args.labels else args.labels
     args.audios = args.audios if args.audios != ['none'] else None
     args.audio_output = (
@@ -143,7 +143,7 @@ def init_args():
     if not args.labels or not os.path.isfile(args.labels):
         args.labels_reinit = True
     if not args.reencode and not args.increment:
-        args.increment = True
+        args.reencode = True
 
 if __name__ == '__main__':
     init_args()

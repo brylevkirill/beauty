@@ -86,6 +86,7 @@ def shape_audio(audio_file_name, length=None):
     final = length if length and length < final else final
     if start != 0 or final != total:
         temp_file = tempfile.NamedTemporaryFile(suffix='.m4a', delete=False)
+        temp_file.close()
         process = subprocess.run([
             'ffmpeg',
             '-loglevel', args.loglevel,
