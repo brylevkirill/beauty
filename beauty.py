@@ -1,4 +1,5 @@
 import argparse
+import ItsAGramLive
 import multiprocessing
 import os
 import random
@@ -41,10 +42,12 @@ def init_args():
     arg('--queue', type=int, default=2)
     arg('--queue-delay', type=float, default=0.333)
     arg('--cache-delay', type=float)
-    arg('--cache-limit', type=str, default='1M')
+    arg('--cache-limit', type=str)
+    arg('--ppid', type=int)
 
-    arg('--reencode')
-    arg('--increment')
+    arg('--youtube-stream-key', type=str)
+    arg('--instagram-username', type=str)
+    arg('--instagram-password', type=str)
 
     arg('--videos-max-number', type=int)
     arg('--videos-format', type=str)
@@ -106,16 +109,20 @@ def init_args():
     arg('--visual-effect-speedup')
     arg('--visual-effect-speedup-freq', type=float, default=1)
 
+    arg('--reencode')
+    arg('--increment')
+    arg('--reencode-offset', type=float, default=-0.0415)
+    arg('--increment-offset', type=float, default=-0.0245)
+    arg('--mixed-offset', type=float, default=-0.045)
+
+    arg('--cache', metavar='<cache files>', type=str)
+    arg('--video-output', type=str, default='video.%s.%s')
+    arg('--audio-output', type=str, default='audio.%s.%s')
+    arg('--subtitles-output', type=str, default='%s.srt')
+
     arg('--loglevel', type=str,
         choices=['quiet', 'repeat+level+warning', 'repeat+level+verbose'],
         default='repeat+level+warning')
-    arg('--video-output', type=str, default='video.%s.%s')
-    arg('--audio-output', type=str, default='audio.%s.%s')
-    arg('--cache', metavar='<cache files>', type=str)
-    arg('--subtitles-output', type=str, default='%s.srt')
-    arg('--offset-reencode', type=float, default=-0.0415)
-    arg('--offset-increment', type=float, default=-0.0245)
-    arg('--offset-mixed', type=float, default=-0.045)
 
     import beauty
     beauty.args = parser.parse_args()
@@ -126,6 +133,16 @@ def init_args():
         args.videos_height = 1080
     if not args.videos_format:
         args.videos_format = 'mp4'
+    if args.youtube_stream_key and not args.ppid:
+        args.output.append(
+            'rtmp://a.rtmp.youtube.com/live2/' + args.youtube_stream_key)
+    if args.instagram_username and args.instagram_password and not args.ppid:
+        live = ItsAGramLive.ItsAGramLive(
+            username=args.instagram_username,
+            password=args.instagram_password)
+        if live.login() and live.create_broadcast():
+            args.output.append(live.stream_server + live.stream_key)
+            live.start_broadcast()
     beauty.stream = any(
         bool(urllib.parse.urlparse(item).scheme) for item in args.output)
     if not args.output_format:

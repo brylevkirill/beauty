@@ -244,7 +244,7 @@ def cache_input(l: Label, n):
         '-loglevel', args.loglevel,
         '-ss', str(l.input_start_point),
         '-t', str(l.input_final_point - l.input_start_point +
-            args.offset_increment),
+            args.increment_offset),
         '-i', videos[l.input_url].url,
         '-codec:v', 'libx264',
         *(['-crf', '17'] if args.output_quality == 'high' else

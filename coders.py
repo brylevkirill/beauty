@@ -55,7 +55,7 @@ def write_video_reencode():
             '-t', '%.3f' % max(0,
                 apply(effect_mapper, l.output_final_point) -
                 apply(effect_mapper, l.output_start_point) +
-                args.offset_reencode),
+                args.reencode_offset),
             '-i', videos.videos[l.input_url].url
             ] for l in labels.labels
             )),
@@ -165,7 +165,7 @@ def write_video_mixed_increment(initial_labels):
                     output,
                     labels.labels[i0].output_start_point,
                     labels.labels[i - 1].output_final_point +
-                        args.offset_mixed
+                        args.mixed_offset
                     )).encode()
                 )
                 i0 = -1
@@ -245,9 +245,13 @@ def play_video():
                                     args.subtitles_output % id
                                 ] if args.subtitles else [])
                         )) +
-                    ('| (pv -qSs 1; sleep {}; pv -qCB {}; cat) '.format(
-                        args.cache_delay * delay, args.cache_limit)
-                        if args.cache_delay else '') +
+                    ('| pv -qSs 1; ' +
+                        ('sleep {}; '.format(args.cache_delay * delay)
+                            if args.cache_delay else '') +
+                        ('pv -qCB {}; '.format(args.cache_limit)
+                            if args.cache_limit else '') +
+                        'cat' if args.cache_delay or args.cache_limit else ''
+                    ) +
                 ') ' +
                 ('--sub-file=\'{}\' '.format(args.subtitles_output % id)
                     if args.subtitles else '') +
@@ -281,6 +285,7 @@ def play_video_prepare_args():
         argv.extend(['--videos-max-number', '1'])
     if '--loglevel' not in argv:
         argv.extend(['--loglevel', 'quiet'])
+    argv.extend(['--ppid', str(os.getpid())])
     return argv
 
 def play_video_prepare_edit():
