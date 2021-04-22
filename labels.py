@@ -5,7 +5,7 @@ import re
 import typing
 import validators
 
-from beauty import args, output
+from beauty import args
 
 class Label(typing.NamedTuple):
     output_start_point: float = -1
@@ -96,7 +96,7 @@ def write_labels(custom_file_name=None, custom_labels=None):
         )
     if args.subtitles:
         write_subtitles(
-            args.subtitles_output % output if (
+            args.subtitles_output % args.media_output if (
                 '%' in args.subtitles_output)
             else args.subtitles_output)
 

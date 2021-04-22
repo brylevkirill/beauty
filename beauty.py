@@ -34,17 +34,19 @@ def init_args():
     arg('--input', type=str, metavar='<video file>')
     arg('--input-labels', type=str, metavar='<labels file>')
 
+    arg('--loop')
+
     arg('--play')
+    arg('--no-audio')
+    arg('--no-video')
     arg('--save')
     arg('--time', type=float, default=3600)
-    arg('--noloop')
-    arg('--nowait')
-    arg('--queue', type=int, default=2)
-    arg('--queue-delay', type=float, default=0.333)
-    arg('--cache-delay', type=float)
-    arg('--cache-limit', type=str)
+    arg('--no-wait')
+    arg('--queue', type=int, default=1)
+    arg('--queue-delay', type=float, default=0.5)
     arg('--ppid', type=int)
 
+    arg('--stream')
     arg('--youtube-stream-key', type=str)
     arg('--instagram-username', type=str)
     arg('--instagram-password', type=str)
@@ -115,8 +117,9 @@ def init_args():
     arg('--increment-offset', type=float, default=-0.0245)
     arg('--mixed-offset', type=float, default=-0.045)
 
-    arg('--cache', metavar='<cache files>', type=str)
+    arg('--media-output', type=str, default='output.%s')
     arg('--video-output', type=str, default='video.%s.%s')
+    arg('--video-cache', type=str, default='video.%s')
     arg('--audio-output', type=str, default='audio.%s.%s')
     arg('--subtitles-output', type=str, default='%s.srt')
 
@@ -126,13 +129,8 @@ def init_args():
 
     import beauty
     beauty.args = parser.parse_args()
-    beauty.output = 'output.%s' % (
-        beauty.args.output_id if beauty.args.output_id else uuid.uuid1())
-    from beauty import args, output
-    if not args.videos_width and not args.videos_height:
-        args.videos_height = 1080
-    if not args.videos_format:
-        args.videos_format = 'mp4'
+    from beauty import args
+
     if args.youtube_stream_key and not args.ppid:
         args.output.append(
             'rtmp://a.rtmp.youtube.com/live2/' + args.youtube_stream_key)
@@ -143,24 +141,38 @@ def init_args():
         if live.login() and live.create_broadcast():
             args.output.append(live.stream_server + live.stream_key)
             live.start_broadcast()
-    beauty.stream = any(
-        bool(urllib.parse.urlparse(item).scheme) for item in args.output)
+    if not args.stream:
+        args.stream = any(
+            bool(urllib.parse.urlparse(item).scheme) for item in args.output)
+
     if not args.output_format:
-        args.output_format = 'flv' if beauty.stream or args.play else 'mp4'
-    args.labels = output + '.txt' if not args.labels else args.labels
+        args.output_format = 'flv' if args.stream or args.play else 'mp4'
+    if not args.videos_format:
+        args.videos_format = 'mp4'
+    if not args.videos_width and not args.videos_height:
+        args.videos_height = 1080
+
+    args.media_output = args.media_output % (
+        args.output_id if args.output_id else uuid.uuid1())
+    args.labels = args.media_output + '.txt' if not args.labels else args.labels
     args.audios = args.audios if args.audios != ['none'] else None
-    args.audio_output = (
-        args.audio_output % (output, 'm4a') if args.audios else None)
+    args.audio_output = (args.audio_output % (
+        args.media_output, 'm4a') if args.audios else None)
     args.videos = args.videos if args.videos != ['none'] else None
-    args.video_output = args.video_output % (output, args.output_format)
-    args.cache = 'video.' + output + '.%s.' + args.output_format
-    beauty.output += '.' + args.output_format
+    args.video_output = args.video_output % (
+        args.media_output, args.output_format)
+    args.video_cache = args.video_cache % (
+        args.media_output + '.%s.' + args.output_format)
+    args.media_output += '.' + args.output_format
+
     if args.save:
-        args.output.append(beauty.output)
+        args.output.append(args.media_output)
     if not args.labels or not os.path.isfile(args.labels):
         args.labels_reinit = True
     if not args.reencode and not args.increment:
         args.reencode = True
+    if args.loop and not args.play:
+        args.no_audio = args.no_video = True
 
 if __name__ == '__main__':
     init_args()
@@ -172,8 +184,8 @@ if __name__ == '__main__':
     import videos
     import youtube
 
-    if args.play:
-        coders.play_video()
+    if args.loop or args.play:
+        coders.write_video_batch()
         sys.exit()
 
     with multiprocessing.Manager() as manager:

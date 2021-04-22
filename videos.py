@@ -109,12 +109,12 @@ def create_label(n):
             cache_label = Label(
                 output_start_point=label.output_start_point,
                 output_final_point=label.output_final_point,
-                input_url=args.cache % (n + 1),
+                input_url=args.video_cache % (n + 1),
                 input_start_point=0,
                 input_final_point=duration
             )
             cache_video = Video(
-                url=args.cache % (n + 1),
+                url=args.video_cache % (n + 1),
                 duration=duration
             )
             accept = visual_filter(cache_label, cache_video.url)
@@ -126,7 +126,7 @@ def create_label(n):
         retries -= 1
     if label_changed:
         write_labels()
-    if args.increment and not os.path.isfile(args.cache % (n + 1)):
+    if args.increment and not os.path.isfile(args.video_cache % (n + 1)):
         cache_input(label, n)
     return label
 
@@ -253,7 +253,7 @@ def cache_input(l: Label, n):
             ['-preset', 'veryfast'] if args.output_quality == 'low' else []),
         *(['-tune', 'film'] if args.output_quality == 'high' else []),
         '-an',
-        '-y', args.cache % (n + 1)
+        '-y', args.video_cache % (n + 1)
         ],
         check=True
     )
