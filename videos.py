@@ -194,8 +194,6 @@ def next_input_start_point(
     n,
     source_duration,
     output_duration):
-    if args.visual_filter_chrono_mapper:
-        return 0
     assert source_duration >= output_duration
     speed = (
         args.visual_filter_chrono_speed
@@ -232,8 +230,6 @@ def next_input_final_point(
     source_duration,
     output_duration,
     input_start_point):
-    if args.visual_filter_chrono_mapper:
-        return source_duration
     return input_start_point + output_duration
 
 def cache_input(l: Label, n):

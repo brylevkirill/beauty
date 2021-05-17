@@ -270,14 +270,16 @@ def write_video_batch_cmd(argv):
 
 def write_video_batch_args():
     argv = list(sys.argv)
-    argv.remove('--loop')
+    if '--loop' in argv:
+        argv.remove('--loop')
     argv[1:1] = ['--ppid', str(os.getpid())]
     if args.play:
         play_video_args(argv)
     return argv
 
 def play_video_args(argv):
-    argv.remove('--play')
+    if '--play' in argv:
+        argv.remove('--play')
     if '--save' not in argv:
         argv.append('--save')
     if '--reencode' not in argv and '--increment' not in argv:

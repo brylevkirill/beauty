@@ -31,8 +31,8 @@ def visual_effects_speedup_cosine():
         return f(math.pi / p, p, y)
     p = scipy.optimize.fsolve(functools.partial(fx, y=interval), 1)[0]
     filter = 'setpts=\'' \
-        '(2 * (T * %.3f + PI / 2 - mod(T * %.3f + PI / 2, PI)) / PI' \
-        '- cos(mod(T * %.3f + PI / 2, PI))) / %.3f / TB\'' % tuple([p] * 4)
+        '(2 * (T * %.6f + PI / 2 - mod(T * %.6f + PI / 2, PI)) / PI' \
+        '- cos(mod(T * %.6f + PI / 2, PI))) / %.6f / TB\'' % tuple([p] * 4)
     def mapper(y):
         return scipy.optimize.fsolve(functools.partial(f, p=p, y=y), y)[0]
     return filter, mapper

@@ -64,8 +64,9 @@ def youtube_collections(items, type):
                 'jQWSjB95TX8',
                 'MFRPJRcf2M4'
             ],
-            'girls': ['PL659KIPAkeqjaerr91OSBWPHRFbkY5jaD'],
-            'girls2': ['PL659KIPAkeqhUkUJdGoqQg_hxHR8Y38z8']
+            'slow-mo': [
+                'zrPphZ4WJxc'
+            ]
         }
         process(items, videos)
 

@@ -22,29 +22,28 @@ def init_args():
     arg('--audios', type=str, nargs='*', default=['orchestral'],
         metavar='(%s|"none"|"any"|"orchestral"|"electronic"|"labeled")' % opt)
     arg('--videos', type=str, nargs='*', default=['flowers'],
-        metavar='(%s|"none"|"any"|"flowers"|"nightsky"|"girls"|"girls2")' % opt)
+        metavar='(%s|"none"|"any"|"flowers"|"nightsky"|"slow-mo")' % opt)
     arg('--output', type=str, nargs='*', default=[],
         metavar='(<file> | <YT or IG live stream URL> | "-" (stdout))')
 
     arg('--labels', type=str, metavar='<labels file>')
     arg('--labels-reinit')
     arg('--labels-public')
-    arg('--labels-serial')
 
     arg('--input', type=str, metavar='<video file>')
     arg('--input-labels', type=str, metavar='<labels file>')
 
     arg('--loop')
+    arg('--save')
+    arg('--queue', type=int, default=1)
+    arg('--queue-delay', type=float, default=0.5)
+    arg('--no-wait')
+    arg('--time', type=float, default=3600)
+    arg('--ppid', type=int)
 
     arg('--play')
     arg('--no-audio')
     arg('--no-video')
-    arg('--save')
-    arg('--time', type=float, default=3600)
-    arg('--no-wait')
-    arg('--queue', type=int, default=1)
-    arg('--queue-delay', type=float, default=0.5)
-    arg('--ppid', type=int)
 
     arg('--stream')
     arg('--youtube-stream-key', type=str)
@@ -94,7 +93,6 @@ def init_args():
     arg('--visual-filter-ordered')
     arg('--visual-filter-chrono')
     arg('--visual-filter-chrono-serial')
-    arg('--visual-filter-chrono-mapper')
     arg('--visual-filter-chrono-speed', type=float)
     arg('--visual-filter-chrono-speed-factor', type=float, default=1.0)
     arg('--visual-filter-chrono-scope', type=float)
@@ -202,9 +200,6 @@ if __name__ == '__main__':
                     assert args.input
                     created_labels = videos.labels_from_video(args.input)
                     labels.update_labels(created_labels)
-            if args.labels_serial:
-                assert args.input
-                labels.update_labels_serial(args.input)
             labels.write_labels()
         if args.audios:
             args.audios[:] = audios.read_audios()
