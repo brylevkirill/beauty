@@ -142,7 +142,7 @@ def update_label(n):
     input_start_point = l.input_start_point if (
         input_url is None or
         l.input_start_point >= 0) else (
-        next_input_start_point(n, duration(input_url), output_duration))
+        next_input_start_point(n, input_url, output_duration))
     input_final_point = l.input_final_point if (
         input_url is None or
         l.input_start_point >= 0 and
@@ -182,8 +182,14 @@ def next_input_url(n):
 
 def next_input_start_point(
     n,
-    source_duration,
+    input_url,
     output_duration):
+    if input_url in args.inputs:
+        source_duration = sum(
+            (final - start) for start, final in args.inputs[input_url]
+        )
+    else:
+        source_duration = duration(input_url)
     assert source_duration >= output_duration
     speed = (
         args.visual_filter_chrono_speed
@@ -210,10 +216,18 @@ def next_input_start_point(
             labels.labels[n - 1].output_final_point != -1
         else 0
     )
-    return random.uniform(
+    point = random.uniform(
         max(start, point - delta),
         max(start, min(point + delta, source_duration) - output_duration)
     )
+    if input_url in args.inputs:
+        for start, final in args.inputs[input_url]:
+            if point < final - start:
+                point = min(start + point, final - output_duration)
+                return point
+            point -= final - start
+    else:
+        return point
 
 def next_input_final_point(
     input_start_point,
