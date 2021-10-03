@@ -233,19 +233,19 @@ def write_video_batch():
         os.system(f'bash "{temp_file.name}"')
 
 def write_video_batch_cmd(argv):
-    delay = args.output_max_length if args.output_max_length else 60
+    delay = args.output_max_length if args.output_max_length else args.time
     tasks = int(args.time / delay) if args.loop else 1
-    if args.queue == 1:
+    if args.queue_slots == 1:
         args.queue_delay = 0
     return ' '.join(
         ('--{ ' if args.play else '') +
             '<( ' +
                 ('sleep {}; '.format((i - 1 + args.queue_delay) * delay)
                     if i > 0 else '') +
-                ('timeout --foreground {} '.format(args.queue * delay)
-                    if args.no_wait else '') +
+                ('timeout --foreground {} '.format(args.queue_slots * delay)
+                    if args.queue_no_pause else '') +
                 'parallel --fg --ungroup --semaphore ' \
-                    '-j{} '.format(args.queue) +
+                    '-j{} '.format(args.queue_slots) +
                 'python "{}"'.format(
                     '" "'.join(
                         re.sub('"', r'\\\\\\"',

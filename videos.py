@@ -34,7 +34,7 @@ def read_videos():
             l.input_url not in args.videos):
             args.videos.append(l.input_url)
     if not args.videos:
-        raise Exception('No video file names or video URLs given.')
+        raise Exception('No video file names or URLs given.')
     pool = multiprocessing.pool.ThreadPool(len(args.videos))
     result = [pool.apply_async(read_video, (v, False)) for v in args.videos]
     pool.close()
@@ -100,8 +100,8 @@ def create_label(n):
     random.seed(n + random.randint(0, sys.maxsize))
     retries = args.visual_filter_retries
     while True:
-        label, label_changed = change_label(n)
-        if not label_changed:
+        label, label_updated = update_label(n)
+        if not label_updated:
             break
         if args.increment:
             cache_input(label, n)
@@ -124,13 +124,13 @@ def create_label(n):
             labels.labels[n] = label
             break
         retries -= 1
-    if label_changed:
+    if label_updated:
         write_labels()
     if args.increment and not os.path.isfile(args.video_cache % (n + 1)):
         cache_input(label, n)
     return label
 
-def change_label(n):
+def update_label(n):
     l = labels.labels[n]
     output_duration = l.output_final_point - l.output_start_point
     input_url = l.input_url if (
@@ -142,21 +142,14 @@ def change_label(n):
     input_start_point = l.input_start_point if (
         input_url is None or
         l.input_start_point >= 0) else (
-        next_input_start_point(
-            n,
-            duration(input_url),
-            output_duration))
+        next_input_start_point(n, duration(input_url), output_duration))
     input_final_point = l.input_final_point if (
         input_url is None or
         l.input_start_point >= 0 and
         l.input_final_point >= 0 and
         abs(output_duration - input_duration) < 0.01) else (
-        next_input_final_point(
-            n,
-            duration(input_url),
-            output_duration,
-            input_start_point))
-    label_changed = (
+        next_input_final_point(input_start_point, output_duration))
+    label_updated = (
         input_url != l.input_url or
         input_start_point != l.input_start_point or
         input_final_point != l.input_final_point)
@@ -166,29 +159,26 @@ def change_label(n):
         input_url,
         input_start_point,
         input_final_point
-        ), label_changed
+        ), label_updated
 
 def next_input_url(n):
     if not videos:
         return None
-    if args.visual_filter_chrono:
-        return list(videos.keys())[n % len(videos)]
-    else:
-        V = [
-            (url, video) for url, video in videos.items() if (
-                labels.labels[n].input_url is None or
-                re.match(labels.labels[n].input_url, url)
-            )
-        ]
-        if not V:
-            raise Exception(
-                'Video not found for "%s".' % labels.labels[n].input_url)
-        point = random.uniform(0, sum(v.duration for _, v in V))
-        for url, video in V:
-            point -= video.duration
-            if point <= 0:
-                break
-        return url
+    V = [
+        (url, video) for url, video in videos.items() if (
+            labels.labels[n].input_url is None or
+            re.match(labels.labels[n].input_url, url)
+        )
+    ]
+    if not V:
+        raise Exception(
+            'Video not found for "%s".' % labels.labels[n].input_url)
+    point = random.uniform(0, sum(v.duration for _, v in V))
+    for url, video in V:
+        point -= video.duration
+        if point <= 0:
+            break
+    return url
 
 def next_input_start_point(
     n,
@@ -226,10 +216,8 @@ def next_input_start_point(
     )
 
 def next_input_final_point(
-    n,
-    source_duration,
-    output_duration,
-    input_start_point):
+    input_start_point,
+    output_duration):
     return input_start_point + output_duration
 
 def cache_input(l: Label, n):
@@ -277,3 +265,6 @@ def duration(video_url):
 
 def frames_number(video_url):
     return property(video_url, 'v:0', 'nb_frames')
+
+def frames_rate(video_url):
+    return eval(property(video_url, 'v:0', 'r_frame_rate'))

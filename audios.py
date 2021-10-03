@@ -117,7 +117,6 @@ def create_labels():
        not args.labels_from_notes and
        not args.labels_from_onsets):
         args.labels_from_chords = True
-        args.labels_from_beats = True
     points = sorted(set([
         0,
         *(points_from_chords(args.audio_output)
@@ -147,8 +146,8 @@ def create_labels():
         points[:] = [
             points[i] + j * args.labels_max_length
             for i in range(len(points) - 1)
-            for j in range(1 +
-                int((points[i + 1] - points[i]) / args.labels_max_length))
+            for j in range(
+                int((points[i + 1] - points[i]) / args.labels_max_length) + 1)
         ]
     if args.labels_min_length:
         p = [points[0]]

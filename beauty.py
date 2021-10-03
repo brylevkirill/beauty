@@ -12,18 +12,19 @@ def init_args():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     def arg(*args, **kwargs):
-        kwargs['action'] = 'store' if 'type' in kwargs else 'store_true'
+        if 'action' not in kwargs:
+            kwargs['action'] = 'store' if 'type' in kwargs else 'store_true'
         for a in args:
             if a.startswith('--'):
                 kwargs['dest'] = a[2:].replace('-', '_')
         parser.add_argument(*args, **kwargs)
 
     opt = '<file|URL> | <YT playlist URL> | "ytsearch"[""|<N>|"all"]":"<query>'
-    arg('--audios', type=str, nargs='*', default=['orchestral'],
-        metavar='(%s|"none"|"any"|"orchestral"|"electronic"|"labeled")' % opt)
-    arg('--videos', type=str, nargs='*', default=['flowers'],
+    arg('--audios', type=str, nargs='+', action='extend',
+        metavar='(%s|"none"|"any"|"orchestral"|"electronic"|"ambient")' % opt)
+    arg('--videos', type=str, nargs='+', action='extend',
         metavar='(%s|"none"|"any"|"flowers"|"nightsky"|"slow-mo")' % opt)
-    arg('--output', type=str, nargs='*', default=[],
+    arg('--output', type=str, nargs='+', action='extend', default=[],
         metavar='(<file> | <YT or IG live stream URL> | "-" (stdout))')
 
     arg('--labels', type=str, metavar='<labels file>')
@@ -33,11 +34,15 @@ def init_args():
     arg('--input', type=str, metavar='<video file>')
     arg('--input-labels', type=str, metavar='<labels file>')
 
+    arg('--videos-max-number', type=int)
+    arg('--start', type=str, nargs='+', action='extend')
+    arg('--final', type=str, nargs='+', action='extend')
+
     arg('--loop')
     arg('--save')
-    arg('--queue', type=int, default=1)
+    arg('--queue-slots', type=int, default=1)
     arg('--queue-delay', type=float, default=0.5)
-    arg('--no-wait')
+    arg('--queue-no-pause')
     arg('--time', type=float, default=3600)
     arg('--ppid', type=int)
 
@@ -50,7 +55,6 @@ def init_args():
     arg('--instagram-username', type=str)
     arg('--instagram-password', type=str)
 
-    arg('--videos-max-number', type=int)
     arg('--videos-format', type=str)
     arg('--videos-width', type=int)
     arg('--videos-height', type=int)
@@ -153,10 +157,16 @@ def init_args():
     args.media_output = args.media_output % (
         args.output_id if args.output_id else uuid.uuid1())
     args.labels = args.media_output + '.txt' if not args.labels else args.labels
-    args.audios = args.audios if args.audios != ['none'] else None
+    args.audios = (
+        None if args.audios == ['none'] else
+        ['orchestral'] if not args.audios else args.audios
+    )
     args.audio_output = (args.audio_output % (
         args.media_output, 'm4a') if args.audios else None)
-    args.videos = args.videos if args.videos != ['none'] else None
+    args.videos = (
+        None if args.videos == ['none'] else
+        ['flowers'] if not args.videos else args.videos
+    )
     args.video_output = args.video_output % (
         args.media_output, args.output_format)
     args.video_cache = args.video_cache % (
@@ -171,6 +181,34 @@ def init_args():
         args.reencode = True
     if args.loop and not args.play:
         args.no_audio = args.no_video = True
+
+    args.inputs, last_arg, last_url, start, final = {}, None, None, 0, 0
+    for arg in sys.argv:
+        if arg == '--start':
+            from labels import parse_timestamp
+            point = parse_timestamp(args.start[start])
+            start += 1
+            if last_url not in args.inputs:
+                args.inputs[last_url] = []
+            args.inputs[last_url].append([point, -1])
+        elif arg == '--final':
+            from labels import parse_timestamp
+            point = parse_timestamp(args.final[final])
+            final += 1
+            if last_arg == '--start':
+                if point > args.inputs[last_url][-1][0]:
+                    args.inputs[last_url][-1][1] = point
+                else:
+                    del args.inputs[last_url][-1]
+            else:
+                if last_url not in args.inputs:
+                    args.inputs[last_url] = []
+                args.inputs[last_url].append([-1, point])
+        if arg[0:2] == '--':
+            last_arg = arg
+        else:
+            if last_arg == '--videos':
+                last_url = arg
 
 if __name__ == '__main__':
     init_args()
