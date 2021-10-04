@@ -185,7 +185,6 @@ def init_args():
         args.no_audio = args.no_video = True
 
     import labels
-    import videos
 
     args.inputs = {}
     last_arg, last_url, start, final = None, None, 0, 0
@@ -214,6 +213,8 @@ def init_args():
         else:
             if last_arg == '--videos':
                 last_url = arg
+
+    import videos
 
     for url in args.inputs:
         if not args.cuts:
