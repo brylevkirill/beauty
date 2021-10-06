@@ -39,12 +39,10 @@ def visual_effects_speedup_cosine():
 
 def visual_effects_speedup_custom():
     mapping = [(
-        labels.labels[i].output_start_point,
-        labels.labels[i].output_final_point,
-        (labels.labels[i].input_final_point -
-            labels.labels[i].input_start_point) /
-        (labels.labels[i].output_final_point -
-            labels.labels[i].output_start_point)
+        labels.labels[i].start,
+        labels.labels[i].final,
+        (labels.labels[i].input_final - labels.labels[i].input_start) /
+            (labels.labels[i].final - labels.labels[i].start)
         ) for i in range(len(labels.labels))
     ]
     inverse_mapping = []

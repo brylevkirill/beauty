@@ -8,40 +8,39 @@ import validators
 from beauty import args
 
 class Label(typing.NamedTuple):
-    output_start_point: float = -1
-    output_final_point: float = -1
-    input_url: str = None
-    input_start_point: float = -1
-    input_final_point: float = -1
+    start: float = -1
+    final: float = -1
+    input: str = None
+    input_start: float = -1
+    input_final: float = -1
 
 labels = []
 
 def labels_created():
     return all(
-        l.input_url is not None and
-        l.input_start_point != -1 and
-        l.input_final_point != -1
-        for l in labels)
+        label.input is not None and
+        label.input_start != -1 and
+        label.input_final != -1
+        for label in labels)
 
 def update_labels(new_labels):
     if not args.output_max_length:
         labels[:] = new_labels
     else:
         labels[:] = [
-            l for l in new_labels
-            if l.output_start_point < args.output_max_length
-            ]
-        if labels[-1].output_final_point > args.output_max_length:
+            label for label in new_labels
+            if label.start < args.output_max_length
+        ]
+        if labels[-1].final > args.output_max_length:
             labels[-1] = Label(
-                output_start_point = labels[-1].output_start_point,
-                output_final_point =
-                    min(labels[-1].output_final_point, args.output_max_length),
-                input_url = labels[-1].input_url,
-                input_start_point = labels[-1].input_start_point,
-                input_final_point =
-                    labels[-1].input_start_point +
-                    min(labels[-1].output_final_point, args.output_max_length) -
-                    labels[-1].output_start_point
+                start = labels[-1].start,
+                final = min(labels[-1].final, args.output_max_length),
+                input = labels[-1].input,
+                input_start = labels[-1].input_start,
+                input_final =
+                    labels[-1].input_start +
+                    min(labels[-1].final, args.output_max_length) -
+                    labels[-1].start
             )
 
 def update_labels_filter(source_labels, target_labels, timestamp):
@@ -76,7 +75,7 @@ def write_labels(custom_file_name=None, custom_labels=None):
     file_name = args.labels if custom_file_name is None else custom_file_name
     with open(file_name, 'w') as f:
         f.writelines(
-            format_label(l) for l in (
+            format_label(label) for label in (
                 labels if custom_labels is None else custom_labels
             )
         )
@@ -97,30 +96,30 @@ def parse_label(s):
             not validators.url(t[2].replace('---', '-'))):
             raise ValueError('Invalid value "%s".' % t[2])
     return Label(
-        output_start_point = parse_timestamp(t[0]),
-        output_final_point = parse_timestamp(t[1]),
-        input_url = t[2] if t[2:] else None,
-        input_start_point = parse_timestamps(t[3]) if t[3:] else -1,
-        input_final_point = parse_timestamps(t[4]) if t[4:] else -1
+        start = parse_timestamp(t[0]),
+        final = parse_timestamp(t[1]),
+        input = t[2] if t[2:] else None,
+        input_start = parse_timestamps(t[3]) if t[3:] else -1,
+        input_final = parse_timestamps(t[4]) if t[4:] else -1
     )
 
-def format_label(l: Label):
-    return (format_timestamp(l.output_start_point) +
-        '\t' + format_timestamp(l.output_final_point) +
-        ('\t' + l.input_url
-            if l.input_url else '') +
-        ('\t' + format_timestamps(l.input_start_point)
-            if l.input_start_point != -1 else '') +
-        ('\t' + format_timestamps(l.input_final_point)
-            if l.input_final_point != -1 else '') + '\n'
+def format_label(label: Label):
+    return (format_timestamp(label.start) +
+        '\t' + format_timestamp(label.final) +
+        ('\t' + label.input
+            if label.input else '') +
+        ('\t' + format_timestamps(label.input_start)
+            if label.input_start != -1 else '') +
+        ('\t' + format_timestamps(label.input_final)
+            if label.input_final != -1 else '') + '\n'
     )
 
 def read_subtitles(file_name):
     with open(file_name) as f:
         return [
             Label(
-                output_start_point = parse_timestamp(t[0]),
-                output_final_point = parse_timestamp(t[1])
+                start = parse_timestamp(t[0]),
+                final = parse_timestamp(t[1])
             )
             for t in (
                 s.split(' --> ') for s in f.read().splitlines()
@@ -133,8 +132,8 @@ def write_subtitles(file_name):
         f.writelines(
             '%d\n%s --> %s\n%d\n\n' % (
                 i + 1,
-                format_timestamps(labels[i].output_start_point),
-                format_timestamps(labels[i].output_final_point),
+                format_timestamps(labels[i].start),
+                format_timestamps(labels[i].final),
                 i + 1)
             for i in range(len(labels))
         )

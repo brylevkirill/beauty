@@ -27,12 +27,12 @@ def read_videos():
         return
     if args.videos_max_number and len(args.videos) > args.videos_max_number:
         args.videos = random.sample(args.videos, args.videos_max_number)
-    for l in labels.labels:
-        if (l.input_url is not None and
-            (os.path.isfile(l.input_url) or
-            validators.url(l.input_url.replace('---', '-'))) and
-            l.input_url not in args.videos):
-            args.videos.append(l.input_url)
+    for label in labels.labels:
+        if (label.input is not None and
+            (os.path.isfile(label.input) or
+            validators.url(label.input.replace('---', '-'))) and
+            label.input not in args.videos):
+            args.videos.append(label.input)
     if not args.videos:
         raise Exception('No video file names or URLs given.')
     pool = multiprocessing.pool.ThreadPool(len(args.videos))
@@ -41,33 +41,33 @@ def read_videos():
     pool.join()
     [r.get() for r in result]
 
-def read_video(video_url, strict=True):
-    if (validators.url(video_url) and
-        'youtube.com' in video_url or 'youtu.be' in video_url):
-        v = youtube_video(video_url, strict=strict)
+def read_video(url, strict=True):
+    if (validators.url(url) and
+        'youtube.com' in url or 'youtu.be' in url):
+        v = youtube_video(url, strict=strict)
         if not v:
             assert not strict
             return None
-        videos[video_url] = Video(
+        videos[url] = Video(
             url=v[0],
             duration=v[1]
         )
     else:
-        videos[video_url] = Video(
-            url=video_url,
-            duration=duration(video_url)
+        videos[url] = Video(
+            url=url,
+            duration=duration(url)
         )
-    return videos[video_url]
+    return videos[url]
 
-def labels_from_video(video_url):
-    video = read_video(video_url)
+def labels_from_video(url):
+    video = read_video(url)
     points = [0]
     points.extend(
         visual_filter_cuts_base(
             Label(
-                input_url=video_url,
-                input_start_point=0,
-                input_final_point=video.duration
+                input=url,
+                input_start=0,
+                input_final=video.duration
             ),
             video.url))
     points.append(video.duration)
@@ -80,8 +80,8 @@ def labels_from_video(video_url):
     ]
     return [
         Label(
-            output_start_point=points[i],
-            output_final_point=points[i + 1]
+            start=points[i],
+            final=points[i + 1]
         )
         for i in range(len(points) - 1)
     ]
@@ -105,13 +105,13 @@ def create_label(n):
             break
         if args.increment:
             cache_input(label, n)
-            duration = label.output_final_point - label.output_start_point
+            duration = label.final - label.start
             cache_label = Label(
-                output_start_point=label.output_start_point,
-                output_final_point=label.output_final_point,
-                input_url=args.video_cache % (n + 1),
-                input_start_point=0,
-                input_final_point=duration
+                start=label.start,
+                final=label.final,
+                input=args.video_cache % (n + 1),
+                input_start=0,
+                input_final=duration
             )
             cache_video = Video(
                 url=args.video_cache % (n + 1),
@@ -119,7 +119,7 @@ def create_label(n):
             )
             accept = visual_filter(cache_label, cache_video.url)
         else:
-            accept = visual_filter(label, videos[label.input_url].url)
+            accept = visual_filter(label, videos[label.input].url)
         if accept or retries == 0:
             labels.labels[n] = label
             break
@@ -132,26 +132,26 @@ def create_label(n):
 
 def update_label(n):
     label = labels.labels[n]
-    if label.input_url is None or label.input_start_point == -1:
-        input_url, input_start_point, input_final_point = next_input(n)
+    if label.input is None or label.input_start == -1:
+        input, input_start, input_final = next_input(n)
     else:
-        output_duration = label.output_final_point - label.output_start_point
-        input_url, input_start_point, input_final_point = (
-            label.input_url,
-            label.input_start_point,
-            label.input_start_point + output_duration
+        output_duration = label.final - label.start
+        input, input_start, input_final = (
+            label.input,
+            label.input_start,
+            label.input_start + output_duration
         )
     label_updated = (
-        input_url != label.input_url or
-        input_start_point != label.input_start_point or
-        input_final_point != label.input_final_point
+        input != label.input or
+        input_start != label.input_start or
+        input_final != label.input_final
     )
     return Label(
-        label.output_start_point,
-        label.output_final_point,
-        input_url,
-        input_start_point,
-        input_final_point
+        label.start,
+        label.final,
+        input,
+        input_start,
+        input_final
         ), label_updated
 
 def next_input(n):
@@ -159,23 +159,23 @@ def next_input(n):
         return None, None, None
     label = labels.labels[n]
     V = [
-        (url, video) for url, video in sorted(
+        (input, video) for input, video in sorted(
             videos.items(),
             key=lambda x: list(args.inputs.keys()).index(x[0])) if (
-            label.input_url is None or re.match(label.input_url, url)
+                label.input is None or re.match(label.input, input)
         )
     ]
     if not V:
-        raise Exception('Video not found for "%s".' % label.input_url)
-    inputs_duration = sum(duration(url) for url, _ in V)
-    output_duration = label.output_final_point - label.output_start_point
+        raise Exception('Video not found for "%s".' % label.input)
+    inputs_duration = sum(duration(input) for input, _ in V)
+    output_duration = label.final - label.start
     assert inputs_duration >= output_duration
     if args.visual_filter_chrono:
         point = inputs_duration * n / len(labels.labels)
     else:
         point = random.uniform(0, inputs_duration)
-    for input_url, _ in V:
-        input_duration = duration(input_url)
+    for input, _ in V:
+        input_duration = duration(input)
         if point <= input_duration:
             break
         point -= input_duration
@@ -191,35 +191,36 @@ def next_input(n):
     delta = 0.5 * max(scope * input_duration, output_duration)
     last_label = labels.labels[n - 1] if n > 0 else None
     start = (
-        last_label.output_final_point
+        last_label.final
         if args.visual_filter_chrono_serial and
             last_label and
-            last_label.input_url == input_url and
-            last_label.output_final_point != -1
+            last_label.input == input and
+            last_label.final != -1
         else 0
     )
     point = random.uniform(
         max(start, point - delta),
         max(start, min(point + delta, input_duration) - output_duration)
     )
-    if input_url in args.inputs:
-        for start, final in args.inputs[input_url]:
+    if input in args.inputs:
+        for start, final in args.inputs[input]:
             if point < final - start:
                 point = min(start + point, final - output_duration)
                 break
             point -= final - start
-    return input_url, point, point + output_duration
+    return input, point, point + output_duration
 
 def cache_input(label: Label, n):
-    if label.input_url not in videos:
-        read_video(label.input_url)
+    if label.input not in videos:
+        read_video(label.input)
     subprocess.run([
         'ffmpeg',
         '-loglevel', args.loglevel,
-        '-ss', str(label.input_start_point),
-        '-t', str(label.input_final_point - label.input_start_point +
+        '-ss', str(label.input_start),
+        '-t', str(label.input_final -
+            label.input_start +
             args.increment_offset),
-        '-i', videos[label.input_url].url,
+        '-i', videos[label.input].url,
         '-codec:v', 'libx264',
         *(['-crf', '17'] if args.output_quality == 'high' else
             ['-crf', '33'] if args.output_quality == 'low' else []),
@@ -232,33 +233,31 @@ def cache_input(label: Label, n):
         check=True
     )
 
-def property(video_url, stream, name):
+def property(url, stream, name):
     process = subprocess.run([
         'ffprobe',
         '-select_streams', stream,
         '-show_entries', 'format=%s' % name,
         '-of', 'default=noprint_wrappers=1:nokey=1',
         '-v', 'quiet',
-        video_url
+        url
         ],
         check=True,
         stdout=subprocess.PIPE
     )
     return float(process.stdout.decode())
 
-def duration(video_url):
-    if video_url in args.inputs:
-        return sum(
-            (final - start) for start, final in args.inputs[video_url]
-        )
-    if validators.url(video_url):
-        if video_url not in videos:
-            read_video(video_url)
-        return videos[video_url].duration
-    return property(video_url, 'v:0', 'duration')
+def duration(url):
+    if url in args.inputs:
+        return sum((final - start) for start, final in args.inputs[url])
+    if validators.url(url):
+        if url not in videos:
+            read_video(url)
+        return videos[url].duration
+    return property(url, 'v:0', 'duration')
 
-def frames_number(video_url):
-    return property(video_url, 'v:0', 'nb_frames')
+def frames_number(url):
+    return property(url, 'v:0', 'nb_frames')
 
-def frames_rate(video_url):
-    return eval(property(video_url, 'v:0', 'r_frame_rate'))
+def frames_rate(url):
+    return eval(property(url, 'v:0', 'r_frame_rate'))

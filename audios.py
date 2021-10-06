@@ -43,13 +43,13 @@ def read_audios():
                         break
     return [audio]
 
-def read_audio(audio_url):
-    if not fetch_audio(audio_url, args.audio_output):
+def read_audio(url):
+    if not fetch_audio(url, args.audio_output):
         return False
     shape_audio(args.audio_output, length=args.output_max_length)
     return True
 
-def fetch_audio(audio_url, audio_file_name):
+def fetch_audio(url, file_name):
     try:
         process = subprocess.run([
             'youtube-dl',
@@ -57,9 +57,9 @@ def fetch_audio(audio_url, audio_file_name):
             '--no-continue',
             '--extract-audio',
             '--audio-format', 'm4a',
-            audio_url,
+            url,
             '-o',
-            audio_file_name
+            file_name
             ],
             check=True,
             stderr=subprocess.PIPE
@@ -74,8 +74,8 @@ def fetch_audio(audio_url, audio_file_name):
         else:
             raise e
 
-def shape_audio(audio_file_name, length=None):
-    sound = pydub.AudioSegment.from_file(audio_file_name)
+def shape_audio(file_name, length=None):
+    sound = pydub.AudioSegment.from_file(file_name)
     chunks = pydub.silence.detect_nonsilent(
         sound,
         min_silence_len=500,
@@ -92,13 +92,13 @@ def shape_audio(audio_file_name, length=None):
             '-loglevel', args.loglevel,
             '-ss', str(start),
             '-to', str(final),
-            '-i', audio_file_name,
+            '-i', file_name,
             '-y',
             temp_file.name
             ],
             check=True
         )
-        shutil.move(temp_file.name, audio_file_name)
+        shutil.move(temp_file.name, file_name)
 
 def create_labels():
     if (args.labels_from_chords_chroma or
@@ -160,13 +160,13 @@ def create_labels():
         ]
     return [
         Label(
-            output_start_point=points[i],
-            output_final_point=points[i + 1]
+            start=points[i],
+            final=points[i + 1]
         )
         for i in range(len(points) - 1)
     ]
 
-def points_from_chords(audio_file_name):
+def points_from_chords(file_name):
     if (not args.labels_from_chords_chroma and
         not args.labels_from_chords_cnn):
         args.labels_from_chords_chroma = True
@@ -177,20 +177,20 @@ def points_from_chords(audio_file_name):
             madmom.features.chords.DeepChromaChordRecognitionProcessor()
         )
         feat.append(madmom.audio.chroma.DeepChromaProcessor()(
-            audio_file_name
+            file_name
         ))
     if args.labels_from_chords_cnn:
         proc.append(
             madmom.features.chords.CRFChordRecognitionProcessor()
         )
         feat.append(madmom.features.chords.CNNChordFeatureProcessor()(
-            audio_file_name
+            file_name
         ))
     return set(itertools.chain.from_iterable(
         (e for (_, e, _) in p(f)) for (p, f) in zip(proc, feat)
     ))
 
-def points_from_beats(audio_file_name):
+def points_from_beats(file_name):
     if (not args.labels_from_beats_detection and
         not args.labels_from_beats_detection_crf and
         not args.labels_from_beats_tracking and
@@ -220,14 +220,14 @@ def points_from_beats(audio_file_name):
             fps=100
         ))
     return set(itertools.chain.from_iterable(
-        p(madmom.features.beats.RNNBeatProcessor()(audio_file_name))
+        p(madmom.features.beats.RNNBeatProcessor()(file_name))
         for p in proc
     ))
 
-def points_from_notes(audio_file_name):
+def points_from_notes(file_name):
     if (not args.labels_from_notes_rnn and
         not args.labels_from_notes_cnn):
-        return points_from_notes_aubio(audio_file_name)
+        return points_from_notes_aubio(file_name)
     proc = []
     act = []
     if args.labels_from_notes_rnn:
@@ -236,19 +236,19 @@ def points_from_notes(audio_file_name):
             pitch_offset=21
         ))
         act.append(madmom.features.notes.RNNPianoNoteProcessor()(
-            audio_file_name
+            file_name
         ))
     if args.labels_from_notes_cnn:
         proc.append(madmom.features.notes.ADSRNoteTrackingProcessor())
         act.append(madmom.features.notes.CNNPianoNoteProcessor()(
-            audio_file_name
+            file_name
         ))
     return set(itertools.chain.from_iterable(
         (t for (t, *_) in p(a)) for (p, a) in zip(proc, act)
     ))
 
-def points_from_notes_aubio(audio_file_name):
-    source = aubio_source(audio_file_name)
+def points_from_notes_aubio(file_name):
+    source = aubio_source(file_name)
     notes = aubio.notes(samplerate=source.samplerate)
     notes.set_minioi_ms(args.labels_from_notes_min_length * 1000)
     notes.set_silence(args.labels_from_notes_min_volume)
@@ -263,8 +263,8 @@ def points_from_notes_aubio(audio_file_name):
             break
     return set(points)
 
-def points_from_onsets(audio_file_name):
-    source = aubio_source(audio_file_name)
+def points_from_onsets(file_name):
+    source = aubio_source(file_name)
     onset = aubio.onset(
         args.labels_from_onsets_method,
         samplerate=source.samplerate)
@@ -280,33 +280,33 @@ def points_from_onsets(audio_file_name):
             break
     return set(points)
 
-def property(audio_url, stream, name):
+def property(url, stream, name):
     process = subprocess.run([
         'ffprobe',
         '-select_streams', stream,
         '-show_entries', 'format=%s' % name,
         '-of', 'default=noprint_wrappers=1:nokey=1',
         '-v', 'quiet',
-        audio_url
+        url
         ],
         check=True,
         stdout=subprocess.PIPE
     )
     return float(process.stdout.decode())
 
-def duration(audio_url):
-    return property(audio_url, 'a:0', 'duration')
+def duration(url):
+    return property(url, 'a:0', 'duration')
 
-def tempo(audio_file_name):
-    return tempo_from_beats_madmom(audio_file_name)
+def tempo(file_name):
+    return tempo_from_beats_madmom(file_name)
 
-def tempo_from_beats_madmom(audio_file_name):
+def tempo_from_beats_madmom(file_name):
     proc = madmom.features.tempo.TempoEstimationProcessor(fps=100)
-    act = madmom.features.beats.RNNBeatProcessor()(audio_file_name)
+    act = madmom.features.beats.RNNBeatProcessor()(file_name)
     return proc(act)[0][0]
 
-def tempo_from_beats_aubio(audio_file_name):
-    source = aubio_source(audio_file_name)
+def tempo_from_beats_aubio(file_name):
+    source = aubio_source(file_name)
     win_s, hop_s, samplerate = 1024, 512, 44100
     tempi = aubio.tempo("specdiff", win_s, hop_s, samplerate)
     beats = []
@@ -321,17 +321,17 @@ def tempo_from_beats_aubio(audio_file_name):
     bpms = 60 / numpy.diff(beats)
     return numpy.median(bpms)
 
-def tempo_from_chords(audio_file_name):
+def tempo_from_chords(file_name):
     proc = madmom.features.chords.DeepChromaChordRecognitionProcessor()
-    feat = madmom.audio.chroma.DeepChromaProcessor()(audio_file_name)
+    feat = madmom.audio.chroma.DeepChromaProcessor()(file_name)
     intervals = [
         (e - s - (e - s) % 0.01) for (s, e, _) in proc(feat)] or [
-        duration(audio_file_name)
+        duration(file_name)
     ]
     return 60 / collections.Counter(intervals).most_common(1)[0][0]
 
-def aubio_source(audio_file_name):
-    sound = pydub.AudioSegment.from_file(audio_file_name)
+def aubio_source(file_name):
+    sound = pydub.AudioSegment.from_file(file_name)
     temp_file = tempfile.NamedTemporaryFile(suffix='.wav')
     sound.export(temp_file.name, format='wav')
     samplerate, hop_s = 44100, 512

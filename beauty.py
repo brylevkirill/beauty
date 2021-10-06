@@ -221,9 +221,9 @@ def init_args():
             continue
         labels = videos.labels_from_video(url)
         points = []
-        points.append(labels[0].output_start_point)
+        points.append(labels[0].start)
         for label in labels:
-            points.append(label.output_final_point)
+            points.append(label.final)
         def bisect_points(point):
             index = bisect.bisect(points, point)
             if index == 0:

@@ -34,9 +34,9 @@ def write_video(initial_labels):
             shutil.move(args.video_output, args.media_output)
 
 def write_video_reencode():
-    for l in labels.labels:
-        if l.input_url not in videos.videos:
-            read_video(l.input_url)
+    for label in labels.labels:
+        if label.input not in videos.videos:
+            read_video(label.input)
     def apply(functions, x):
         y = x
         for f in functions:
@@ -51,16 +51,15 @@ def write_video_reencode():
         '-loglevel', args.loglevel,
         *(['-re'] if args.stream else []),
         *list(itertools.chain.from_iterable([
-            '-ss', str(l.input_start_point),
+            '-ss', str(label.input_start),
             '-t', '%.3f' % max(0,
-                apply(effect_mapper, l.output_final_point) -
-                apply(effect_mapper, l.output_start_point) +
+                apply(effect_mapper, label.final) -
+                apply(effect_mapper, label.start) +
                 args.reencode_offset),
-            '-i', videos.videos[l.input_url].url
-            ] for l in labels.labels
+            '-i', videos.videos[label.input].url
+            ] for label in labels.labels
             )),
-        '-t', str(args.output_max_length or
-            labels.labels[-1].output_final_point),
+        '-t', str(args.output_max_length or labels.labels[-1].final),
         *(['-i', args.audio_output] if args.audio_output else []),
         '-filter_complex', ', '.join(filters) + '[v]',
         '-map', '[v]',
@@ -168,9 +167,8 @@ def write_video_mixed_increment(initial_labels):
                     'inpoint %f\n' \
                     'outpoint %f\n' % (
                         args.media_output,
-                        labels.labels[i0].output_start_point,
-                        labels.labels[i - 1].output_final_point +
-                            args.mixed_offset
+                        labels.labels[i0].start,
+                        labels.labels[i - 1].final + args.mixed_offset
                     )).encode()
                 )
                 i0 = -1
@@ -192,11 +190,9 @@ def write_video_with_audio():
         'ffmpeg',
         '-loglevel', args.loglevel,
         *(['-re'] if args.stream else []),
-        '-t', str(args.output_max_length or
-            labels.labels[-1].output_final_point),
+        '-t', str(args.output_max_length or labels.labels[-1].final),
         '-i', args.video_output,
-        '-t', str(args.output_max_length or
-            labels.labels[-1].output_final_point),
+        '-t', str(args.output_max_length or labels.labels[-1].final),
         '-i', args.audio_output,
         '-map', '0:v',
         '-map', '1:a',
