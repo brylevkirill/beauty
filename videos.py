@@ -155,27 +155,36 @@ def update_label(n):
         ), label_updated
 
 def next_input(n):
-    if not videos:
-        return None, None, None
     label = labels.labels[n]
-    V = [
-        (input, video) for input, video in sorted(
-            videos.items(),
-            key=lambda x: list(args.inputs.keys()).index(x[0])) if (
-                label.input is None or re.match(label.input, input)
+    inputs = [
+        input for input in sorted(
+            videos.keys(),
+            key=lambda x: (list(args.inputs.keys()) + [x[0]]).index(x[0])
+        ) if (
+            label.input is None or
+            re.match(label.input, input)
         )
     ]
-    if not V:
+    if not inputs:
         raise Exception('Video not found for "%s".' % label.input)
-    inputs_duration = sum(duration(input) for input, _ in V)
+    def complete_duration(input):
+        if input in args.inputs:
+            return sum((
+                (final if final != -1 else duration(input)) -
+                (start if start != -1 else 0)
+                ) for start, final in args.inputs[input]
+            )
+        else:
+            return duration(input)
+    inputs_duration = sum(complete_duration(input) for input in inputs)
     output_duration = label.final - label.start
     assert inputs_duration >= output_duration
     if args.visual_filter_chrono:
         point = inputs_duration * n / len(labels.labels)
     else:
         point = random.uniform(0, inputs_duration)
-    for input, _ in V:
-        input_duration = duration(input)
+    for input in inputs:
+        input_duration = complete_duration(input)
         if point <= input_duration:
             break
         point -= input_duration
@@ -204,6 +213,10 @@ def next_input(n):
     )
     if input in args.inputs:
         for start, final in args.inputs[input]:
+            if start == -1:
+                start = 0
+            if final == -1:
+                final = duration(input)
             if point < final - start:
                 point = min(start + point, final - output_duration)
                 break
@@ -248,8 +261,6 @@ def property(url, stream, name):
     return float(process.stdout.decode())
 
 def duration(url):
-    if url in args.inputs:
-        return sum((final - start) for start, final in args.inputs[url])
     if validators.url(url):
         if url not in videos:
             read_video(url)

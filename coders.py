@@ -42,7 +42,7 @@ def write_video_reencode():
         for f in functions:
             y = f(y)
         return y
-    concat_filter = ['concat=n=%d:v=1:a=0' % len(labels.labels)]
+    concat_filter = ['concat=n=%d:v=1:a=0:unsafe=1' % len(labels.labels)]
     effect_filter, effect_mapper = visual_effects()
     rotate_filter = ['transpose=2'] if args.output_rotate else []
     filters = concat_filter + effect_filter + rotate_filter

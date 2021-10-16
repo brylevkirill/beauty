@@ -216,31 +216,29 @@ def init_args():
 
     import videos
 
-    for url in args.inputs:
-        if not args.cuts:
-            continue
-        labels = videos.labels_from_video(url)
-        points = []
-        points.append(labels[0].start)
-        for label in labels:
-            points.append(label.final)
-        def bisect_points(point):
-            index = bisect.bisect(points, point)
-            if index == 0:
-                point = points[index]
-            elif index == len(points):
-                point = points[index-1]
-            elif abs(point-points[index-1]) > abs(point-points[index]):
-                point = points[index]
-            else:
-                point = points[index-1]
-            return point
-        for i in range(len(args.inputs[url])):
-            start, final = args.inputs[url][i]
-            args.inputs[url][i] = [
-                points[0] if start == -1 else bisect_points(start),
-                points[-1] if final == -1 else bisect_points(final)
-            ]
+    if args.cuts:
+        for url in args.inputs:
+            labels = videos.labels_from_video(url)
+            points = [labels[0].start]
+            for label in labels:
+                points.append(label.final)
+            def bisect_points(point):
+                index = bisect.bisect(points, point)
+                if index == 0:
+                    point = points[index]
+                elif index == len(points):
+                    point = points[index-1]
+                elif abs(point-points[index-1]) > abs(point-points[index]):
+                    point = points[index]
+                else:
+                    point = points[index-1]
+                return point
+            for i in range(len(args.inputs[url])):
+                start, final = args.inputs[url][i]
+                args.inputs[url][i] = [
+                    points[0] if start == -1 else bisect_points(start),
+                    points[-1] if final == -1 else bisect_points(final)
+                ]
 
 if __name__ == '__main__':
     init_args()
