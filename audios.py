@@ -14,10 +14,10 @@ import tempfile
 import validators
 
 from beauty import args
-from labels import Label
+from mappings import Mapping, Resource
 from youtube import youtube_collections, youtube_playlists, youtube_video
 
-def read_audios():
+def read():
     youtube_collections(args.audios, 'audio')
     youtube_playlists(args.audios)
     if not args.audios:
@@ -28,7 +28,7 @@ def read_audios():
             shutil.copyfile(audio, args.audio_output)
             break
         else:
-            if args.labels_reinit or args.visual_effect_speedup:
+            if args.mappings_reinit or args.visual_effect_speedup:
                 if read_audio(audio):
                     break
             else:
@@ -100,33 +100,33 @@ def shape_audio(file_name, length=None):
         )
         shutil.move(temp_file.name, file_name)
 
-def create_labels():
-    if (args.labels_from_chords_chroma or
-        args.labels_from_chords_cnn):
-        args.labels_from_chords = True
-    if (args.labels_from_beats_detection or
-        args.labels_from_beats_detection_crf or
-        args.labels_from_beats_tracking or
-        args.labels_from_beats_tracking_dbn):
-        args.labels_from_beats = True
-    if (args.labels_from_notes_rnn or
-        args.labels_from_notes_cnn):
-        args.labels_from_notes = True
-    if (not args.labels_from_chords and
-       not args.labels_from_beats and
-       not args.labels_from_notes and
-       not args.labels_from_onsets):
-        args.labels_from_chords = True
+def generate_mappings():
+    if (args.mappings_from_chords_chroma or
+        args.mappings_from_chords_cnn):
+        args.mappings_from_chords = True
+    if (args.mappings_from_beats_detection or
+        args.mappings_from_beats_detection_crf or
+        args.mappings_from_beats_tracking or
+        args.mappings_from_beats_tracking_dbn):
+        args.mappings_from_beats = True
+    if (args.mappings_from_notes_rnn or
+        args.mappings_from_notes_cnn):
+        args.mappings_from_notes = True
+    if (not args.mappings_from_chords and
+       not args.mappings_from_beats and
+       not args.mappings_from_notes and
+       not args.mappings_from_onsets):
+        args.mappings_from_chords = True
     points = sorted(set([
         0,
         *(points_from_chords(args.audio_output)
-            if args.labels_from_chords else []),
+            if args.mappings_from_chords else []),
         *(points_from_beats(args.audio_output)
-            if args.labels_from_beats else []),
+            if args.mappings_from_beats else []),
         *(points_from_notes(args.audio_output)
-            if args.labels_from_notes else []),
+            if args.mappings_from_notes else []),
         *(points_from_onsets(args.audio_output)
-            if args.labels_from_onsets else []),
+            if args.mappings_from_onsets else []),
         duration(args.audio_output)
     ]))
     if args.output_max_length:
@@ -134,52 +134,56 @@ def create_labels():
             p for p in points
             if p < args.output_max_length
             ] + [args.output_max_length]
-    if args.labels_joints and args.labels_joints > 1:
-        points[:] = points[:-1:args.labels_joints] + [points[-1]]
-    if args.labels_splits and args.labels_splits > 1:
+    if args.mappings_joints and args.mappings_joints > 1:
+        points[:] = points[:-1:args.mappings_joints] + [points[-1]]
+    if args.mappings_splits and args.mappings_splits > 1:
         points[:] = [
-            points[i] + (points[i + 1] - points[i]) * j / args.labels_splits
+            points[i] + (points[i + 1] - points[i]) * j / args.mappings_splits
             for i in range(len(points) - 1)
-            for j in range(args.labels_splits)
+            for j in range(args.mappings_splits)
         ] + [points[-1]]
-    if args.labels_max_length:
+    if args.mappings_max_interval:
         points[:] = [
-            points[i] + j * args.labels_max_length
+            points[i] + j * args.mappings_max_interval
             for i in range(len(points) - 1)
             for j in range(
-                int((points[i + 1] - points[i]) / args.labels_max_length) + 1)
+                int((points[i + 1] - points[i]) /
+                    args.mappings_max_interval + 1)
+            )
         ]
-    if args.labels_min_length:
+    if args.mappings_min_interval:
         p = [points[0]]
         points[1:-1] = [
             points[i]
             for i in range(1, len(points) - 1)
-            if points[i] - p[0] >= args.labels_min_length and
-                points[-1] - points[i] >= args.labels_min_length and
+            if points[i] - p[0] >= args.mappings_min_interval and
+                points[-1] - points[i] >= args.mappings_min_interval and
                 not p.remove(p[0]) and not p.append(points[i])
         ]
     return [
-        Label(
-            start=points[i],
-            final=points[i + 1]
+        Mapping(
+            target=Resource(
+                start=points[i],
+                final=points[i + 1]
+            )
         )
         for i in range(len(points) - 1)
     ]
 
 def points_from_chords(file_name):
-    if (not args.labels_from_chords_chroma and
-        not args.labels_from_chords_cnn):
-        args.labels_from_chords_chroma = True
+    if (not args.mappings_from_chords_chroma and
+        not args.mappings_from_chords_cnn):
+        args.mappings_from_chords_chroma = True
     proc = []
     feat = []
-    if args.labels_from_chords_chroma:
+    if args.mappings_from_chords_chroma:
         proc.append(
             madmom.features.chords.DeepChromaChordRecognitionProcessor()
         )
         feat.append(madmom.audio.chroma.DeepChromaProcessor()(
             file_name
         ))
-    if args.labels_from_chords_cnn:
+    if args.mappings_from_chords_cnn:
         proc.append(
             madmom.features.chords.CRFChordRecognitionProcessor()
         )
@@ -191,29 +195,29 @@ def points_from_chords(file_name):
     ))
 
 def points_from_beats(file_name):
-    if (not args.labels_from_beats_detection and
-        not args.labels_from_beats_detection_crf and
-        not args.labels_from_beats_tracking and
-        not args.labels_from_beats_tracking_dbn):
-        args.labels_from_beats_tracking = True
-        if not args.labels_joints:
-            args.labels_joints = 4
+    if (not args.mappings_from_beats_detection and
+        not args.mappings_from_beats_detection_crf and
+        not args.mappings_from_beats_tracking and
+        not args.mappings_from_beats_tracking_dbn):
+        args.mappings_from_beats_tracking = True
+        if not args.mappings_joints:
+            args.mappings_joints = 4
     proc = []
-    if args.labels_from_beats_detection:
+    if args.mappings_from_beats_detection:
         proc.append(madmom.features.beats.BeatDetectionProcessor(
             fps=100
         ))
-    if args.labels_from_beats_detection_crf:
+    if args.mappings_from_beats_detection_crf:
         proc.append(madmom.features.beats.CRFBeatDetectionProcessor(
             min_bpm=50,
             max_bpm=100,
             fps=100
         ))
-    if args.labels_from_beats_tracking:
+    if args.mappings_from_beats_tracking:
         proc.append(madmom.features.beats.BeatTrackingProcessor(
             fps=100
         ))
-    if args.labels_from_beats_tracking_dbn:
+    if args.mappings_from_beats_tracking_dbn:
         proc.append(madmom.features.beats.DBNBeatTrackingProcessor(
             min_bpm=50,
             max_bpm=100,
@@ -225,12 +229,12 @@ def points_from_beats(file_name):
     ))
 
 def points_from_notes(file_name):
-    if (not args.labels_from_notes_rnn and
-        not args.labels_from_notes_cnn):
+    if (not args.mappings_from_notes_rnn and
+        not args.mappings_from_notes_cnn):
         return points_from_notes_aubio(file_name)
     proc = []
     act = []
-    if args.labels_from_notes_rnn:
+    if args.mappings_from_notes_rnn:
         proc.append(madmom.features.notes.NotePeakPickingProcessor(
             fps=100,
             pitch_offset=21
@@ -238,7 +242,7 @@ def points_from_notes(file_name):
         act.append(madmom.features.notes.RNNPianoNoteProcessor()(
             file_name
         ))
-    if args.labels_from_notes_cnn:
+    if args.mappings_from_notes_cnn:
         proc.append(madmom.features.notes.ADSRNoteTrackingProcessor())
         act.append(madmom.features.notes.CNNPianoNoteProcessor()(
             file_name
@@ -250,8 +254,8 @@ def points_from_notes(file_name):
 def points_from_notes_aubio(file_name):
     source = aubio_source(file_name)
     notes = aubio.notes(samplerate=source.samplerate)
-    notes.set_minioi_ms(args.labels_from_notes_min_length * 1000)
-    notes.set_silence(args.labels_from_notes_min_volume)
+    notes.set_minioi_ms(args.mappings_from_notes_min_length * 1000)
+    notes.set_silence(args.mappings_from_notes_min_volume)
     points = []
     frames = 0
     while True:
@@ -266,11 +270,11 @@ def points_from_notes_aubio(file_name):
 def points_from_onsets(file_name):
     source = aubio_source(file_name)
     onset = aubio.onset(
-        args.labels_from_onsets_method,
+        args.mappings_from_onsets_method,
         samplerate=source.samplerate)
-    onset.set_threshold(args.labels_from_onsets_threshold)
-    onset.set_minioi_ms(args.labels_from_onsets_min_length * 1000)
-    onset.set_silence(args.labels_from_onsets_min_volume)
+    onset.set_threshold(args.mappings_from_onsets_threshold)
+    onset.set_minioi_ms(args.mappings_from_onsets_min_length * 1000)
+    onset.set_silence(args.mappings_from_onsets_min_volume)
     points = []
     while True:
         samples, read = source()

@@ -3,7 +3,7 @@ import math
 import scipy.optimize
 import warnings
 
-import labels
+import mappings
 from beauty import args
 from audios import tempo
 
@@ -39,11 +39,13 @@ def visual_effects_speedup_cosine():
 
 def visual_effects_speedup_custom():
     mapping = [(
-        labels.labels[i].start,
-        labels.labels[i].final,
-        (labels.labels[i].input_final - labels.labels[i].input_start) /
-            (labels.labels[i].final - labels.labels[i].start)
-        ) for i in range(len(labels.labels))
+        mappings.mappings[i].target.start,
+        mappings.mappings[i].target.final,
+        (mappings.mappings[i].source.final -
+            mappings.mappings[i].source.start) /
+        (mappings.mappings[i].target.final -
+            mappings.mappings[i].target.start)
+        ) for i in range(len(mappings.mappings))
     ]
     inverse_mapping = []
     filter = '%s'

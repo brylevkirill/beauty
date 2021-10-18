@@ -8,18 +8,18 @@ import sys
 import tempfile
 import uuid
 
-import labels
+import mappings
 import videos
 from beauty import args
-from labels import labels_created, update_labels_filter
+from mappings import mappings_complete, update_filter
 from videos import read_video
 from effects import visual_effects
 
-def write_video(initial_labels):
-    if not labels_created():
+def write_video(old_mappings):
+    if not mappings_complete():
         return
     if args.reencode and args.increment:
-        write_video_mixed(initial_labels)
+        write_video_mixed(old_mappings)
     elif args.reencode:
         write_video_reencode()
     elif args.increment:
@@ -34,15 +34,15 @@ def write_video(initial_labels):
             shutil.move(args.video_output, args.media_output)
 
 def write_video_reencode():
-    for label in labels.labels:
-        if label.input not in videos.videos:
-            read_video(label.input)
+    for mapping in mappings.mappings:
+        if mapping.source.url not in videos.videos:
+            read_video(mapping.source.url)
     def apply(functions, x):
         y = x
         for f in functions:
             y = f(y)
         return y
-    concat_filter = ['concat=n=%d:v=1:a=0:unsafe=1' % len(labels.labels)]
+    concat_filter = ['concat=n=%d:v=1:a=0:unsafe=1' % len(mappings.mappings)]
     effect_filter, effect_mapper = visual_effects()
     rotate_filter = ['transpose=2'] if args.output_rotate else []
     filters = concat_filter + effect_filter + rotate_filter
@@ -51,19 +51,21 @@ def write_video_reencode():
         '-loglevel', args.loglevel,
         *(['-re'] if args.stream else []),
         *list(itertools.chain.from_iterable([
-            '-ss', str(label.input_start),
+            '-ss', str(mapping.source.start),
             '-t', '%.3f' % max(0,
-                apply(effect_mapper, label.final) -
-                apply(effect_mapper, label.start) +
+                apply(effect_mapper, mapping.target.final) -
+                apply(effect_mapper, mapping.target.start) +
                 args.reencode_offset),
-            '-i', videos.videos[label.input].url
-            ] for label in labels.labels
+            '-i', videos.videos[mapping.source.url].url
+            ] for mapping in mappings.mappings
             )),
-        '-t', str(args.output_max_length or labels.labels[-1].final),
+        '-t', str(args.output_max_length or
+            mappings.mappings[-1].target.final),
         *(['-i', args.audio_output] if args.audio_output else []),
         '-filter_complex', ', '.join(filters) + '[v]',
         '-map', '[v]',
-        *(['-map', '%d:a' % len(labels.labels)] if args.audio_output else []),
+        *(['-map', '%d:a' % len(mappings.mappings)]
+            if args.audio_output else []),
         '-shortest',
         '-vsync', 'vfr',
         '-flags', '+global_header',
@@ -109,17 +111,17 @@ def write_video_increment():
     )
     process.stdin.writelines(
         ('file \'%s\'\n' % args.video_cache % (i + 1)).encode()
-        for i in range(len(labels.labels))
+        for i in range(len(mappings.mappings))
     )
     _, errors = process.communicate()
     if process.returncode != 0:
         raise Exception(errors)
 
-def write_video_mixed(initial_labels):
+def write_video_mixed(old_mappings):
     if not os.path.isfile(args.media_output):
         write_video_mixed_reencode()
     else:
-        write_video_mixed_increment(initial_labels)
+        write_video_mixed_increment(old_mappings)
 
 def write_video_mixed_reencode():
     process = subprocess.run([
@@ -127,21 +129,22 @@ def write_video_mixed_reencode():
         '-loglevel', args.loglevel] +
         list(itertools.chain.from_iterable([
             '-i', args.video_cache % (i + 1)
-            ] for i in range(len(labels.labels))
+            ] for i in range(len(mappings.mappings))
         )) + [
-        '-filter_complex', 'concat=n=%d:v=1:a=0' % len(labels.labels),
+        '-filter_complex',
+            'concat=n=%d:v=1:a=0:unsafe=1' % len(mappings.mappings),
         '-y',
         args.video_output
         ],
         check=True
     )
 
-def write_video_mixed_increment(initial_labels):
-    labels_delta = sorted(
-        set(labels.labels) - set(initial_labels),
-        key=lambda t: t[0]
+def write_video_mixed_increment(old_mappings):
+    mappings_delta = sorted(
+        set(mappings.mappings) - set(old_mappings),
+        key=lambda mapping: mapping.target.start
     )
-    if not labels_delta:
+    if not mappings_delta:
         return
     process = subprocess.Popen([
         'ffmpeg',
@@ -159,20 +162,22 @@ def write_video_mixed_increment(initial_labels):
         stderr=subprocess.PIPE
     )
     i0 = -1
-    for i in range(len(labels.labels) + 1):
-        if i == len(labels.labels) or labels.labels[i] in labels_delta:
+    for i in range(len(mappings.mappings) + 1):
+        if (i == len(mappings.mappings) or
+            mappings.mappings[i] in mappings_delta):
             if i0 != -1:
                 process.stdin.write((
                     'file \'%s\'\n' \
                     'inpoint %f\n' \
                     'outpoint %f\n' % (
                         args.media_output,
-                        labels.labels[i0].start,
-                        labels.labels[i - 1].final + args.mixed_offset
+                        mappings.mappings[i0].target.start,
+                        (mappings.mappings[i - 1].target.final +
+                            args.mixed_offset)
                     )).encode()
                 )
                 i0 = -1
-            if i < len(labels.labels):
+            if i < len(mappings.mappings):
                 process.stdin.write((
                     'file \'%s\'\n' % (
                         args.video_cache % (i + 1)
@@ -190,9 +195,11 @@ def write_video_with_audio():
         'ffmpeg',
         '-loglevel', args.loglevel,
         *(['-re'] if args.stream else []),
-        '-t', str(args.output_max_length or labels.labels[-1].final),
+        '-t', str(args.output_max_length or
+            mappings.mappings[-1].target.final),
         '-i', args.video_output,
-        '-t', str(args.output_max_length or labels.labels[-1].final),
+        '-t', str(args.output_max_length or
+            mappings.mappings[-1].target.final),
         '-i', args.audio_output,
         '-map', '0:v',
         '-map', '1:a',
@@ -315,9 +322,9 @@ def player_args_file(id):
 def player_config():
     conf_file = '%s.input.conf' % args.media_output
     if args.input:
-        labels_backup = '%s.labels.txt' % args.media_output
-        func = inspect.getsource(update_labels_filter).replace('\n', '\\n')
-        call = "update_labels_filter('%s', '%s', ${=time-pos})"
+        mappings_backup = '%s.mappings.txt' % args.media_output
+        func = inspect.getsource(update_filter).replace('\n', '\\n')
+        call = "update_filter('%s', '%s', ${=time-pos})"
         with open(conf_file, 'w') as f:
             f.write(
                 """
@@ -325,9 +332,9 @@ def player_config():
                     MBTN_RIGHT_DBL run python -c \"%s\"
                     MBTN_RIGHT ignore
                 """ % (
-                    func + call % (args.labels, args.input_labels),
-                    func + call % (labels_backup, args.input_labels)
+                    func + call % (args.mappings, args.input_mappings),
+                    func + call % (mappings_backup, args.input_mappings)
                 )
             )
-        shutil.copyfile(args.input_labels, labels_backup)
+        shutil.copyfile(args.input_mappings, mappings_backup)
     return conf_file

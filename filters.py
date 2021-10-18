@@ -7,9 +7,9 @@ import sys
 import tempfile
 
 from beauty import args
-from labels import Label
+from mappings import Mapping
 
-def visual_filter(label: Label, video):
+def visual_filter(mapping: Mapping, video):
     filters = [
         visual_filter_pace,
         visual_filter_cuts,
@@ -22,15 +22,15 @@ def visual_filter(label: Label, video):
         filters.sort(key=lambda f:
             sys.argv.index('--' + f.__name__.replace('_', '-')))
     for f in filters:
-        if not f(label, video):
+        if not f(mapping, video):
             return False
     return True
 
-def visual_filter_base(label: Label, video, filter_expr, filter_func):
+def visual_filter_base(mapping: Mapping, video, filter_expr, filter_func):
     process = subprocess.run([
         'ffmpeg',
-        '-ss', str(label.input_start),
-        '-to', str(label.input_final),
+        '-ss', str(mapping.source.start),
+        '-to', str(mapping.source.final),
         '-i', video,
         '-vf', filter_expr,
         '-f', 'null',
@@ -42,7 +42,7 @@ def visual_filter_base(label: Label, video, filter_expr, filter_func):
     )
     return filter_func(process.stderr.decode())
 
-def visual_filter_pace(label: Label, video):
+def visual_filter_pace(mapping: Mapping, video):
     filter_expr = ('select=\'gt(scene,%f)\',showinfo' %
         args.visual_filter_pace_prob)
     def filter_func(x):
@@ -53,41 +53,41 @@ def visual_filter_pace(label: Label, video):
             == (args.visual_filter_pace == 'fast')
         )
     return visual_filter_base(
-        label,
+        mapping,
         video,
         filter_expr,
         filter_func)
 
-def visual_filter_cuts_base(label: Label, video):
+def visual_filter_cuts_base(mapping: Mapping, video):
     filter_expr = ('select=\'gt(scene,%f)\',showinfo' %
         args.visual_filter_cuts_prob)
     def filter_func(x):
         return (float(s.split('pts_time:')[1].split()[0])
             for s in x.splitlines() if 'pts_time:' in s)
     return visual_filter_base(
-        label,
+        mapping,
         video,
         filter_expr,
         filter_func)
 
-def visual_filter_cuts(label: Label, video):
-    cuts = next(iter(visual_filter_cuts_base(label, video)), None)
+def visual_filter_cuts(mapping: Mapping, video):
+    cuts = next(iter(visual_filter_cuts_base(mapping, video)), None)
     return bool(cuts) == (args.visual_filter_cuts == 'include')
 
-def visual_filter_dark(label: Label, video):
+def visual_filter_dark(mapping: Mapping, video):
     dark = visual_filter_base(
-        label,
+        mapping,
         video,
         'blackframe',
         lambda x: 'pblack:' in x)
     return bool(dark) == (args.visual_filter_dark == 'include')
 
-def frame(label: Label, video, color):
+def frame(mapping: Mapping, video, color):
     temp_file = tempfile.NamedTemporaryFile(suffix='.png')
     process = subprocess.run([
         'ffmpeg',
         '-loglevel', args.loglevel,
-        '-ss', str((label.input_start + label.input_final) / 2),
+        '-ss', str((mapping.source.start + mapping.source.final) / 2),
         '-i', video,
         '-frames:v', str(1),
         '-vcodec', 'png',
@@ -99,13 +99,13 @@ def frame(label: Label, video, color):
     temp_file.close()
     return image
 
-def visual_filter_face(label: Label, video):
+def visual_filter_face(mapping: Mapping, video):
     face = dlib.get_frontal_face_detector()(
-        frame(label, video, cv2.COLOR_BGR2RGB))
+        frame(mapping, video, cv2.COLOR_BGR2RGB))
     return bool(face) == (args.visual_filter_face == 'include')
 
-def visual_filter_word(label: Label, video):
-    image = frame(label, video, cv2.COLOR_BGR2GRAY)
+def visual_filter_word(mapping: Mapping, video):
+    image = frame(mapping, video, cv2.COLOR_BGR2GRAY)
     _, threshold = cv2.threshold(
         image,
         0,

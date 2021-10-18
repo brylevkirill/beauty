@@ -28,12 +28,12 @@ def init_args():
     arg('--output', type=str, nargs='+', action='extend', default=[],
         metavar='(<file> | <YT or IG live stream URL> | "-" (stdout))')
 
-    arg('--labels', type=str, metavar='<labels file>')
-    arg('--labels-reinit')
-    arg('--labels-public')
+    arg('--mappings', type=str, metavar='<mappings file>')
+    arg('--mappings-reinit')
+    arg('--mappings-public')
 
-    arg('--input', type=str, metavar='<video file>')
-    arg('--input-labels', type=str, metavar='<labels file>')
+    arg('--input', type=str, metavar='<video file|URL>')
+    arg('--input-mappings', type=str, metavar='<mappings file>')
 
     arg('--videos-max-number', type=int)
     arg('--start', type=str, nargs='+', action='extend')
@@ -67,32 +67,32 @@ def init_args():
     arg('--output-id', type=str)
     arg('--subtitles')
 
-    arg('--labels-from-input')
-    arg('--labels-from-chords')
-    arg('--labels-from-chords-chroma')
-    arg('--labels-from-chords-cnn')
-    arg('--labels-from-beats')
-    arg('--labels-from-beats-detection')
-    arg('--labels-from-beats-detection-crf')
-    arg('--labels-from-beats-tracking')
-    arg('--labels-from-beats-tracking-dbn')
-    arg('--labels-from-notes')
-    arg('--labels-from-notes-min-length', type=float, default=0.03)
-    arg('--labels-from-notes-min-volume', type=float, default=-70)
-    arg('--labels-from-notes-rnn')
-    arg('--labels-from-notes-cnn')
-    arg('--labels-from-onsets')
-    arg('--labels-from-onsets-method', type=str,
+    arg('--mappings-from-cuts')
+    arg('--mappings-from-chords')
+    arg('--mappings-from-chords-chroma')
+    arg('--mappings-from-chords-cnn')
+    arg('--mappings-from-beats')
+    arg('--mappings-from-beats-detection')
+    arg('--mappings-from-beats-detection-crf')
+    arg('--mappings-from-beats-tracking')
+    arg('--mappings-from-beats-tracking-dbn')
+    arg('--mappings-from-notes')
+    arg('--mappings-from-notes-min-length', type=float, default=0.03)
+    arg('--mappings-from-notes-min-volume', type=float, default=-70)
+    arg('--mappings-from-notes-rnn')
+    arg('--mappings-from-notes-cnn')
+    arg('--mappings-from-onsets')
+    arg('--mappings-from-onsets-method', type=str,
         choices=['energy', 'hfc', 'complex', 'phase',
             'specdiff', 'kl', 'mkl', 'specflux'],
         default='specflux')
-    arg('--labels-from-onsets-threshold', type=float, default=0.3)
-    arg('--labels-from-onsets-min-length', type=float, default=0.02)
-    arg('--labels-from-onsets-min-volume', type=float, default=-90)
-    arg('--labels-min-length', type=float, default=0.2)
-    arg('--labels-max-length', type=float)
-    arg('--labels-joints', type=int)
-    arg('--labels-splits', type=int)
+    arg('--mappings-from-onsets-threshold', type=float, default=0.3)
+    arg('--mappings-from-onsets-min-length', type=float, default=0.02)
+    arg('--mappings-from-onsets-min-volume', type=float, default=-90)
+    arg('--mappings-min-interval', type=float, default=0.2)
+    arg('--mappings-max-interval', type=float)
+    arg('--mappings-joints', type=int)
+    arg('--mappings-splits', type=int)
 
     arg('--visual-filter-threads', type=int, default=os.cpu_count())
     arg('--visual-filter-retries', type=int, default=100)
@@ -158,7 +158,9 @@ def init_args():
 
     args.media_output = args.media_output % (
         args.output_id if args.output_id else uuid.uuid1())
-    args.labels = args.media_output + '.txt' if not args.labels else args.labels
+    args.mappings = (
+        args.media_output + '.txt' if not args.mappings else args.mappings
+    )
     args.audios = (
         None if args.audios == ['none'] else
         ['orchestral'] if not args.audios else args.audios
@@ -177,26 +179,26 @@ def init_args():
 
     if args.save:
         args.output.append(args.media_output)
-    if not args.labels or not os.path.isfile(args.labels):
-        args.labels_reinit = True
+    if not args.mappings or not os.path.isfile(args.mappings):
+        args.mappings_reinit = True
     if not args.reencode and not args.increment:
         args.reencode = True
     if args.loop and not args.play:
         args.no_audio = args.no_video = True
 
-    import labels
+    import mappings
 
     args.inputs = {}
     last_arg, last_url, start, final = None, None, 0, 0
     for arg in sys.argv:
         if arg == '--start':
-            point = labels.parse_timestamp(args.start[start])
+            point = mappings.parse_timestamp(args.start[start])
             start += 1
             if last_url not in args.inputs:
                 args.inputs[last_url] = []
             args.inputs[last_url].append([point, -1])
         elif arg == '--final':
-            point = labels.parse_timestamp(args.final[final])
+            point = mappings.parse_timestamp(args.final[final])
             final += 1
             if last_arg == '--start':
                 last_input = args.inputs[last_url][-1]
@@ -218,10 +220,10 @@ def init_args():
 
     if args.cuts:
         for url in args.inputs:
-            labels = videos.labels_from_video(url)
-            points = [labels[0].start]
-            for label in labels:
-                points.append(label.final)
+            mappings = videos.mappings_from_cuts(url)
+            points = [mappings[0].start]
+            for mapping in mappings:
+                points.append(mapping.final)
             def bisect_points(point):
                 index = bisect.bisect(points, point)
                 if index == 0:
@@ -246,7 +248,7 @@ if __name__ == '__main__':
 
     import audios
     import coders
-    import labels
+    import mappings
     import videos
     import youtube
 
@@ -255,33 +257,32 @@ if __name__ == '__main__':
         sys.exit()
 
     with multiprocessing.Manager() as manager:
-        labels.labels = manager.list()
+        mappings.mappings = manager.list()
         videos.videos = manager.dict()
         random.seed(int.from_bytes(os.getrandom(4), 'big'))
-        if not args.labels_reinit:
-            labels.read_labels()
+        if not args.mappings_reinit:
+            mappings.read()
         else:
-            if args.input_labels:
-                labels.read_labels(args.input_labels)
-            else:
-                if args.labels_from_input:
-                    assert args.input
-                    created_labels = videos.labels_from_video(args.input)
-                    labels.update_labels(created_labels)
-            labels.write_labels()
+            if args.input_mappings:
+                mappings.read(args.input_mappings)
+            elif args.mappings_from_cuts:
+                assert args.input
+                new_mappings = videos.mappings_from_cuts(args.input)
+                mappings.update(new_mappings)
+            mappings.write()
         if args.audios:
-            args.audios[:] = audios.read_audios()
-            if not labels.labels:
-                if args.labels_public:
-                    created_labels = youtube.obtain_labels(args.audios[0])
-                if not args.labels_public or not created_labels:
-                    created_labels = audios.create_labels()
-                labels.update_labels(created_labels)
-                labels.write_labels()
-        initial_labels = list(labels.labels)
+            args.audios[:] = audios.read()
+            if not mappings.mappings:
+                if args.mappings_public:
+                    new_mappings = youtube.mappings_from_subs(args.audios[0])
+                if not args.mappings_public or not new_mappings:
+                    new_mappings = audios.generate_mappings()
+                mappings.update(new_mappings)
+                mappings.write()
+        old_mappings = list(mappings.mappings)
         if args.videos:
-            videos.read_videos()
-            created_labels = videos.create_labels()
-            labels.update_labels(created_labels)
-            labels.write_labels()
-        coders.write_video(initial_labels)
+            videos.read()
+            new_mappings = videos.generate_mappings()
+            mappings.update(new_mappings)
+            mappings.write()
+        coders.write_video(old_mappings)

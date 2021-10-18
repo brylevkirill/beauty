@@ -5,7 +5,7 @@ import urllib.parse
 import validators
 
 from beauty import args
-from labels import parse_timestamp, read_subtitles
+from mappings import parse_timestamp, read_subtitles
 
 def youtube_collections(items, type):
     def process(items, collections):
@@ -36,7 +36,7 @@ def youtube_collections(items, type):
             'orchestral': ['PL659KIPAkeqgZtrIadb7YXGlFJBqZp9SX'],
             'electronic': ['PL659KIPAkeqjudXxn0pEdDIl4nAWRqFuV'],
             'ambient': ['PL659KIPAkeqijzchDUC_kOjTD5k9RXhaY'],
-            'labeled': [
+            'subtitled': [
                 'Ax_GJvCbGRc',
                 'u0-iGVgBaYs',
                 'thlW3tjec9I',
@@ -177,7 +177,7 @@ def youtube_video_id(url):
             return o.path.split('/')[2]
     return None
 
-def obtain_labels(url):
+def mappings_from_subs(url):
     video_id = youtube_video_id(url)
     process = subprocess.run([
         'youtube-dl',
@@ -196,6 +196,6 @@ def obtain_labels(url):
     if 'WARNING: video doesn\'t have subtitles' in errors:
         return []
     subtitles = "%s.en.vtt" % video_id
-    labels = read_subtitles(subtitles)
+    mappings = read_subtitles(subtitles)
     os.remove(subtitles)
-    return labels
+    return mappings

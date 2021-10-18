@@ -8,11 +8,11 @@ import sys
 import typing
 import validators
 
-import labels
+import mappings
 from beauty import args
-from labels import labels_created, write_labels, Label
-from youtube import youtube_collections, youtube_playlists, youtube_video
 from filters import visual_filter, visual_filter_cuts_base
+from mappings import mappings_complete, Mapping, Resource
+from youtube import youtube_collections, youtube_playlists, youtube_video
 
 class Video(typing.NamedTuple):
     url: str
@@ -20,19 +20,20 @@ class Video(typing.NamedTuple):
 
 videos = {}
 
-def read_videos():
+def read():
     youtube_collections(args.videos, 'video')
     youtube_playlists(args.videos)
-    if labels_created() and args.increment:
+    if mappings_complete() and args.increment:
         return
     if args.videos_max_number and len(args.videos) > args.videos_max_number:
         args.videos = random.sample(args.videos, args.videos_max_number)
-    for label in labels.labels:
-        if (label.input is not None and
-            (os.path.isfile(label.input) or
-            validators.url(label.input.replace('---', '-'))) and
-            label.input not in args.videos):
-            args.videos.append(label.input)
+    for mapping in mappings.mappings:
+        if (mapping.source is not None and
+            mapping.source.url is not None and
+            (os.path.isfile(mapping.source.url) or
+            validators.url(mapping.source.url.replace('---', '-'))) and
+            mapping.source.url not in args.videos):
+            args.videos.append(mapping.source.url)
     if not args.videos:
         raise Exception('No video file names or URLs given.')
     pool = multiprocessing.pool.ThreadPool(len(args.videos))
@@ -59,114 +60,128 @@ def read_video(url, strict=True):
         )
     return videos[url]
 
-def labels_from_video(url):
+def mappings_from_cuts(url):
     video = read_video(url)
     points = [0]
     points.extend(
         visual_filter_cuts_base(
-            Label(
-                input=url,
-                input_start=0,
-                input_final=video.duration
+            Mapping(
+                source=Resource(
+                    start=0,
+                    final=video.duration
+                )
             ),
             video.url))
     points.append(video.duration)
     p = [points[0]]
     points[1:-1] = [
         points[i] for i in range(1, len(points) - 1)
-        if points[i] - p[0] >= args.labels_min_length and
-            points[-1] - points[i] >= args.labels_min_length and
+        if points[i] - p[0] >= args.mappings_min_interval and
+            points[-1] - points[i] >= args.mappings_min_interval and
             not p.remove(p[0]) and not p.append(points[i])
     ]
     return [
-        Label(
-            start=points[i],
-            final=points[i + 1]
+        Mapping(
+            source=Resource(
+                url = url,
+                start=points[i],
+                final=points[i + 1]
+            ),
+            target=Resource(
+                url = url,
+                start=points[i],
+                final=points[i + 1]
+            )
         )
         for i in range(len(points) - 1)
     ]
 
-def create_labels():
+def generate_mappings():
     pool = multiprocessing.pool.Pool(args.visual_filter_threads)
     result = [
-        pool.apply_async(create_label, (n,))
-        for n in range(len(labels.labels))
+        pool.apply_async(generate_mapping, (n,))
+        for n in range(len(mappings.mappings))
     ]
     pool.close()
     pool.join()
     return [r.get() for r in result]
 
-def create_label(n):
+def generate_mapping(n):
     random.seed(n + random.randint(0, sys.maxsize))
     retries = args.visual_filter_retries
     while True:
-        label, label_updated = update_label(n)
-        if not label_updated:
+        mapping, mapping_updated = update_mapping(n)
+        if args.increment:
+            cache_file_name = args.video_cache % (n + 1)
+            if mapping_updated or not os.path.isfile(cache_file_name):
+                cache_input(mapping, n)
+        if not mapping_updated:
             break
         if args.increment:
-            cache_input(label, n)
-            duration = label.final - label.start
-            cache_label = Label(
-                start=label.start,
-                final=label.final,
-                input=args.video_cache % (n + 1),
-                input_start=0,
-                input_final=duration
+            duration = mapping.target.final - mapping.target.start
+            cache_mapping = Mapping(
+                source=Resource(
+                    url=cache_file_name,
+                    start=0,
+                    final=duration
+                ),
+                target=Resource(
+                    start=mapping.target.start,
+                    final=mapping.target.final
+                )
             )
-            cache_video = Video(
-                url=args.video_cache % (n + 1),
-                duration=duration
-            )
-            accept = visual_filter(cache_label, cache_video.url)
+            accept = visual_filter(cache_mapping, cache_file_name)
         else:
-            accept = visual_filter(label, videos[label.input].url)
+            accept = visual_filter(mapping, videos[mapping.source.url].url)
         if accept or retries == 0:
-            labels.labels[n] = label
+            mappings.mappings[n] = mapping
+            mappings.write()
             break
         retries -= 1
-    if label_updated:
-        write_labels()
-    if args.increment and not os.path.isfile(args.video_cache % (n + 1)):
-        cache_input(label, n)
-    return label
+    return mapping
 
-def update_label(n):
-    label = labels.labels[n]
-    if label.input is None or label.input_start == -1:
+def update_mapping(n):
+    mapping = mappings.mappings[n]
+    if (mapping.source is None or
+        mapping.source.url is None or
+        mapping.source.start == -1):
         input, input_start, input_final = next_input(n)
     else:
-        output_duration = label.final - label.start
+        output_duration = mapping.target.final - mapping.target.start
         input, input_start, input_final = (
-            label.input,
-            label.input_start,
-            label.input_start + output_duration
+            mapping.source.url,
+            mapping.source.start,
+            mapping.source.start + output_duration
         )
-    label_updated = (
-        input != label.input or
-        input_start != label.input_start or
-        input_final != label.input_final
+    mapping_updated = (
+        mapping.source is None or
+        input != mapping.source.url or
+        input_start != mapping.source.start or
+        input_final != mapping.source.final
     )
-    return Label(
-        label.start,
-        label.final,
-        input,
-        input_start,
-        input_final
-        ), label_updated
+    return Mapping(
+        source=Resource(
+            url=input,
+            start=input_start,
+            final=input_final
+        ),
+        target=mapping.target
+        ), mapping_updated
 
 def next_input(n):
-    label = labels.labels[n]
+    mapping = mappings.mappings[n]
     inputs = [
         input for input in sorted(
             videos.keys(),
-            key=lambda x: (list(args.inputs.keys()) + [x[0]]).index(x[0])
+            key=lambda v: (list(args.inputs.keys()) + [v[0]]).index(v[0])
         ) if (
-            label.input is None or
-            re.match(label.input, input)
+            mapping.source is None or
+            mapping.source.url is None or
+            re.match(mapping.source.url, input)
         )
     ]
     if not inputs:
-        raise Exception('Video not found for "%s".' % label.input)
+        raise Exception('Video not found for "%s".' % mapping.source.url)
     def complete_duration(input):
         if input in args.inputs:
             return sum((
@@ -177,10 +192,16 @@ def next_input(n):
         else:
             return duration(input)
     inputs_duration = sum(complete_duration(input) for input in inputs)
-    output_duration = label.final - label.start
+    output_duration = mapping.target.final - mapping.target.start
     assert inputs_duration >= output_duration
     if args.visual_filter_chrono:
-        point = inputs_duration * n / len(labels.labels)
+        speed = (
+            args.visual_filter_chrono_speed
+                if args.visual_filter_chrono_speed
+            else (n / len(mappings.mappings) *
+                args.visual_filter_chrono_speed_factor)
+        )
+        point = inputs_duration * speed % inputs_duration
     else:
         point = random.uniform(0, inputs_duration)
     for input in inputs:
@@ -188,25 +209,26 @@ def next_input(n):
         if point <= input_duration:
             break
         point -= input_duration
+    last_mapping = mappings.mappings[n - 1] if n > 0 else None
+    start = (
+        last_mapping.target.final
+        if args.visual_filter_chrono_serial and
+            last_mapping and
+            last_mapping.source and
+            last_mapping.source.url == input and
+            last_mapping.target.final != -1
+        else 0
+    )
     scope = (
         args.visual_filter_chrono_scope
             if args.visual_filter_chrono_scope
         else min(1,
-            1 / (len(labels.labels) * input_duration / inputs_duration) *
+            inputs_duration / input_duration / len(mappings.mappings) *
                 args.visual_filter_chrono_scope_factor)
             if args.visual_filter_chrono
         else 1
     )
     delta = 0.5 * max(scope * input_duration, output_duration)
-    last_label = labels.labels[n - 1] if n > 0 else None
-    start = (
-        last_label.final
-        if args.visual_filter_chrono_serial and
-            last_label and
-            last_label.input == input and
-            last_label.final != -1
-        else 0
-    )
     point = random.uniform(
         max(start, point - delta),
         max(start, min(point + delta, input_duration) - output_duration)
@@ -223,17 +245,17 @@ def next_input(n):
             point -= final - start
     return input, point, point + output_duration
 
-def cache_input(label: Label, n):
-    if label.input not in videos:
-        read_video(label.input)
+def cache_input(mapping: Mapping, n):
+    if mapping.source.url not in videos:
+        read_video(mapping.source.url)
     subprocess.run([
         'ffmpeg',
         '-loglevel', args.loglevel,
-        '-ss', str(label.input_start),
-        '-t', str(label.input_final -
-            label.input_start +
+        '-ss', str(mapping.source.start),
+        '-t', str(mapping.source.final -
+            mapping.source.start +
             args.increment_offset),
-        '-i', videos[label.input].url,
+        '-i', videos[mapping.source.url].url,
         '-codec:v', 'libx264',
         *(['-crf', '17'] if args.output_quality == 'high' else
             ['-crf', '33'] if args.output_quality == 'low' else []),
