@@ -262,7 +262,7 @@ def write_video_batch_cmd(argv):
                             ] + ([
                                 '--subtitles-output',
                                 args.subtitles_output % id
-                            ] if args.subtitles else [])
+                            ] if args.output_subtitles else [])
                     )) +
             ') ' +
             (player_args_file(id) if args.play else '') +
@@ -311,7 +311,7 @@ def player_args(conf_file):
 def player_args_file(id):
     return (
         ('--sub-file=\'{}\' '.format(args.subtitles_output % id)
-            if args.subtitles else '') +
+            if args.output_subtitles else '') +
         ('--lavfi-complex=\'' \
             '[vid2]scale=iw/2:ih/2[v],' \
             '[vid1][v]overlay=W-w:H-h[vo]\' ' \

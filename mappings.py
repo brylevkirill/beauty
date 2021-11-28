@@ -32,28 +32,23 @@ def update(new_mappings):
     else:
         mappings[:] = [
             mapping for mapping in new_mappings
-            if mapping.start < args.output_max_length
+            if mapping.target.start < args.output_max_length
         ]
-        if mappings[-1].final > args.output_max_length:
+        if mappings[-1].target.final > args.output_max_length:
             mappings[-1] = Mapping(
                 source = Resource(
                     url = mappings[-1].source.url,
                     start = mappings[-1].source.start,
                     final = (
                         mappings[-1].source.start +
-                        min(
-                            mappings[-1].target.final,
-                            args.output_max_length) -
+                        args.output_max_length -
                         mappings[-1].target.start
                     )
                 ),
                 target = Resource(
                     url = mappings[-1].target.url,
                     start = mappings[-1].target.start,
-                    final = min(
-                        mappings[-1].target.final,
-                        args.output_max_length
-                    )
+                    final = args.output_max_length
                 )
             )
 
@@ -93,7 +88,7 @@ def write(custom_file_name=None, custom_mappings=None):
                 mappings if custom_mappings is None else custom_mappings
             )
         )
-    if args.subtitles:
+    if args.output_subtitles:
         write_subtitles(
             args.subtitles_output % args.media_output if (
                 '%' in args.subtitles_output)

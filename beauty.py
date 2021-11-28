@@ -22,15 +22,12 @@ def init_args():
 
     opt = '<file|URL> | <YT playlist URL> | "ytsearch"[""|<N>|"all"]":"<query>'
     arg('--audios', type=str, nargs='+', action='extend',
-        metavar='(%s|"none"|"any"|"orchestral"|"electronic"|"ambient")' % opt)
+        metavar='(%s|"none"|"any"|"orchestral"|"electronic")' % opt)
     arg('--videos', type=str, nargs='+', action='extend',
         metavar='(%s|"none"|"any"|"flowers"|"nightsky"|"slow-mo")' % opt)
     arg('--output', type=str, nargs='+', action='extend', default=[],
         metavar='(<file> | <YT or IG live stream URL> | "-" (stdout))')
-
     arg('--mappings', type=str, metavar='<mappings file>')
-    arg('--mappings-reinit')
-    arg('--mappings-public')
 
     arg('--input', type=str, metavar='<video file|URL>')
     arg('--input-mappings', type=str, metavar='<mappings file>')
@@ -64,9 +61,11 @@ def init_args():
     arg('--output-max-length', type=float)
     arg('--output-format', type=str)
     arg('--output-quality', type=str, choices=['high', 'medium', 'low'])
+    arg('--output-subtitles')
     arg('--output-id', type=str)
-    arg('--subtitles')
 
+    arg('--mappings-reinit')
+    arg('--mappings-from-subs')
     arg('--mappings-from-cuts')
     arg('--mappings-from-chords')
     arg('--mappings-from-chords-chroma')
@@ -196,7 +195,7 @@ def init_args():
             start += 1
             if last_url not in args.inputs:
                 args.inputs[last_url] = []
-            args.inputs[last_url].append([point, -1])
+            args.inputs[last_url].append((point, -1))
         elif arg == '--final':
             point = mappings.parse_timestamp(args.final[final])
             final += 1
@@ -209,7 +208,7 @@ def init_args():
             else:
                 if last_url not in args.inputs:
                     args.inputs[last_url] = []
-                args.inputs[last_url].append([-1, point])
+                args.inputs[last_url].append((-1, point))
         if arg[0:2] == '--':
             last_arg = arg
         else:
@@ -273,9 +272,9 @@ if __name__ == '__main__':
         if args.audios:
             args.audios[:] = audios.read()
             if not mappings.mappings:
-                if args.mappings_public:
+                if args.mappings_from_subs:
                     new_mappings = youtube.mappings_from_subs(args.audios[0])
-                if not args.mappings_public or not new_mappings:
+                if not args.mappings_from_subs or not new_mappings:
                     new_mappings = audios.generate_mappings()
                 mappings.update(new_mappings)
                 mappings.write()

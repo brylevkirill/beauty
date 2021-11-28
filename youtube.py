@@ -35,7 +35,7 @@ def youtube_collections(items, type):
         audios = {
             'orchestral': ['PL659KIPAkeqgZtrIadb7YXGlFJBqZp9SX'],
             'electronic': ['PL659KIPAkeqjudXxn0pEdDIl4nAWRqFuV'],
-            'ambient': ['PL659KIPAkeqijzchDUC_kOjTD5k9RXhaY'],
+            'atmospheric': ['PL659KIPAkeqijzchDUC_kOjTD5k9RXhaY'],
             'subtitled': [
                 'Ax_GJvCbGRc',
                 'u0-iGVgBaYs',
