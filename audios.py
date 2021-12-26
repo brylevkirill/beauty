@@ -52,8 +52,9 @@ def read_audio(url):
 def fetch_audio(url, file_name):
     try:
         process = subprocess.run([
-            'youtube-dl',
+            'yt-dlp',
             '--quiet',
+            '--no-warnings',
             '--no-continue',
             '--extract-audio',
             '--audio-format', 'm4a',

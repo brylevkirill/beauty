@@ -84,8 +84,9 @@ def youtube_playlists(items):
 
 def youtube_playlist(url):
     process = subprocess.run([
-        'youtube-dl',
+        'yt-dlp',
         '--quiet',
+        '--no-warnings',
         '--get-title',
         '--get-id',
         '--flat-playlist',
@@ -117,8 +118,9 @@ def youtube_video(
     strict=True):
     try:
         process = subprocess.run([
-            'youtube-dl',
+            'yt-dlp',
             '--quiet',
+            '--no-warnings',
             '--get-url',
             '--get-duration',
             '-f', filter,
@@ -180,8 +182,9 @@ def youtube_video_id(url):
 def mappings_from_subs(url):
     video_id = youtube_video_id(url)
     process = subprocess.run([
-        'youtube-dl',
+        'yt-dlp',
         '--quiet',
+        '--no-warnings',
         '--write-sub',
         '--sub-lang', 'en',
         '--skip-download',

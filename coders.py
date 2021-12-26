@@ -76,6 +76,7 @@ def write_video_reencode():
             ['-preset', 'veryfast'] if args.output_quality == 'low' else []),
         *(['-tune', 'film'] if args.output_quality == 'high' else []),
         '-codec:a', 'aac' if args.stream else 'copy',
+        '-tag:a', '10',
         '-f', 'tee',
         '-use_fifo', '1',
         '|'.join(
