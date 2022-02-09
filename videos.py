@@ -1,4 +1,3 @@
-import collections
 import multiprocessing.pool
 import os
 import random
@@ -194,16 +193,13 @@ def next_input(n):
     inputs_duration = sum(complete_duration(input) for input in inputs)
     output_duration = mapping.target.final - mapping.target.start
     assert inputs_duration >= output_duration
-    if args.visual_filter_chrono:
-        speed = (
-            args.visual_filter_chrono_speed
-                if args.visual_filter_chrono_speed
-            else (n / len(mappings.mappings) *
-                args.visual_filter_chrono_speed_factor)
-        )
-        point = inputs_duration * speed % inputs_duration
-    else:
-        point = random.uniform(0, inputs_duration)
+    point = (
+        n / len(mappings.mappings) *
+        args.visual_filter_chrono_speed *
+        inputs_duration % inputs_duration
+        ) if args.visual_filter_chrono else (
+            random.uniform(0, inputs_duration)
+    )
     for input in inputs:
         input_duration = complete_duration(input)
         if point <= input_duration:
@@ -219,16 +215,15 @@ def next_input(n):
             last_mapping.target.final != -1
         else 0
     )
-    scope = (
-        args.visual_filter_chrono_scope
-            if args.visual_filter_chrono_scope
-        else min(1,
-            inputs_duration / input_duration / len(mappings.mappings) *
-                args.visual_filter_chrono_scope_factor)
-            if args.visual_filter_chrono
-        else 1
+    delta = 0.5 * max(
+        input_duration * 
+        min(1,
+            inputs_duration / input_duration /
+            len(mappings.mappings) *
+            args.visual_filter_chrono_scope
+        ) if args.visual_filter_chrono else input_duration,
+        output_duration
     )
-    delta = 0.5 * max(scope * input_duration, output_duration)
     point = random.uniform(
         max(start, point - delta),
         max(start, min(point + delta, input_duration) - output_duration)
