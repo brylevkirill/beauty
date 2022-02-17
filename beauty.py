@@ -33,16 +33,17 @@ def init_args():
     arg('--input-mappings', type=str, metavar='<mappings file>')
 
     arg('--loop')
-    arg('--save')
-    arg('--queue-slots', type=int, default=1)
-    arg('--queue-delay', type=float, default=0.5)
-    arg('--queue-no-pause')
-    arg('--time', type=float, default=3600)
-    arg('--ppid', type=int)
+    arg('--loop-time', type=float, default=3600)
+    arg('--loop-jobs', type=int, default=1)
+    arg('--loop-job-time', type=float, default=60)
+    arg('--loop-job-wait', type=float, default=0.5)
+    arg('--loop-job-kill')
+    arg('--loop-ppid', type=int)
 
     arg('--play')
     arg('--no-audio')
     arg('--no-video')
+    arg('--save')
 
     arg('--stream')
     arg('--youtube-stream-key', type=str)
@@ -50,16 +51,18 @@ def init_args():
     arg('--instagram-password', type=str)
 
     arg('--output-format', type=str)
-    arg('--output-quality', type=str, choices=['high', 'medium', 'low'])
+    arg('--output-width', type=int)
+    arg('--output-height', type=int)
     arg('--output-rotate')
-    arg('--output-max-length', type=float)
+    arg('--output-length', type=float)
+    arg('--output-quality', type=str, choices=['high', 'medium', 'low'])
     arg('--output-subtitles')
     arg('--output-id', type=str)
 
     arg('--videos-format', type=str)
     arg('--videos-width', type=int)
     arg('--videos-height', type=int)
-    arg('--videos-max-number', type=int)
+    arg('--videos-number', type=int)
     arg('--start', type=str, nargs='+', action='extend')
     arg('--final', type=str, nargs='+', action='extend')
     arg('--cuts')
@@ -132,19 +135,20 @@ def init_args():
     beauty.args = parser.parse_args()
     from beauty import args
 
-    if args.youtube_stream_key and not args.ppid:
-        args.output.append(
-            'rtmp://a.rtmp.youtube.com/live2/' + args.youtube_stream_key)
-    if args.instagram_username and args.instagram_password and not args.ppid:
-        live = ItsAGramLive.ItsAGramLive(
-            username=args.instagram_username,
-            password=args.instagram_password)
-        if live.login() and live.create_broadcast():
-            args.output.append(live.stream_server + live.stream_key)
-            live.start_broadcast()
     if not args.stream:
         args.stream = any(
             bool(urllib.parse.urlparse(item).scheme) for item in args.output)
+    if not args.loop_ppid:
+        if args.youtube_stream_key:
+            args.output.append(
+                'rtmp://a.rtmp.youtube.com/live2/' + args.youtube_stream_key)
+        if args.instagram_username and args.instagram_password:
+            live = ItsAGramLive.ItsAGramLive(
+                username=args.instagram_username,
+                password=args.instagram_password)
+            if live.login() and live.create_broadcast():
+                args.output.append(live.stream_server + live.stream_key)
+                live.start_broadcast()
 
     if not args.output_format:
         args.output_format = 'flv' if args.stream or args.play else 'mp4'

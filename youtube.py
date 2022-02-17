@@ -1,5 +1,6 @@
 import os
 import random
+import re
 import subprocess
 import urllib.parse
 import validators
@@ -123,6 +124,7 @@ def youtube_video(
             '--no-warnings',
             '--get-url',
             '--get-duration',
+            '--get-format',
             '-f', filter,
             '--youtube-skip-dash-manifest',
             url
@@ -142,8 +144,16 @@ def youtube_video(
         raise e
     output = process.stdout.decode().splitlines()
     variants = [
-        (url, parse_timestamp(duration))
-        for (url, duration) in zip(*[iter(output)] * 2)
+        (
+            url,
+            parse_timestamp(duration),
+            re.search('\d+x\d+', format).group()
+        )
+        for (
+            url,
+            duration,
+            format
+        ) in zip(*[iter(output)] * 3)
         if youtube_check_video(url)
     ]
     if strict and not variants:

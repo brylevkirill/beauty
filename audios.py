@@ -46,7 +46,7 @@ def read():
 def read_audio(url):
     if not fetch_audio(url, args.audio_output):
         return False
-    shape_audio(args.audio_output, length=args.output_max_length)
+    shape_audio(args.audio_output, length=args.output_length)
     return True
 
 def fetch_audio(url, file_name):
@@ -130,11 +130,11 @@ def generate_mappings():
             if args.mappings_from_onsets else []),
         duration(args.audio_output)
     ]))
-    if args.output_max_length:
+    if args.output_length:
         points[:] = [
             p for p in points
-            if p < args.output_max_length
-            ] + [args.output_max_length]
+            if p < args.output_length
+            ] + [args.output_length]
     if args.mappings_joints and args.mappings_joints > 1:
         points[:] = points[:-1:args.mappings_joints] + [points[-1]]
     if args.mappings_splits and args.mappings_splits > 1:

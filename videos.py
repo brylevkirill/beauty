@@ -16,6 +16,8 @@ from youtube import youtube_collections, youtube_playlists, youtube_video
 class Video(typing.NamedTuple):
     url: str
     duration: float
+    width: int
+    height: int
 
 videos = {}
 
@@ -24,8 +26,8 @@ def read():
     youtube_playlists(args.videos)
     if mappings_complete() and args.increment:
         return
-    if args.videos_max_number and len(args.videos) > args.videos_max_number:
-        args.videos = random.sample(args.videos, args.videos_max_number)
+    if args.videos_number and len(args.videos) > args.videos_number:
+        args.videos = random.sample(args.videos, args.videos_number)
     for mapping in mappings.mappings:
         if (mapping.source is not None and
             mapping.source.url is not None and
@@ -48,14 +50,20 @@ def read_video(url, strict=True):
         if not v:
             assert not strict
             return None
+        width, height = v[2].split('x')
         videos[url] = Video(
             url=v[0],
-            duration=v[1]
+            duration=v[1],
+            width=int(width),
+            height=int(height)
         )
     else:
+        width, height = frames_size(url).split('x')
         videos[url] = Video(
             url=url,
-            duration=duration(url)
+            duration=duration(url),
+            width=int(width),
+            height=int(height)
         )
     return videos[url]
 
@@ -267,7 +275,7 @@ def property(url, stream, name):
     process = subprocess.run([
         'ffprobe',
         '-select_streams', stream,
-        '-show_entries', 'format=%s' % name,
+        '-show_entries', 'stream=%s' % name,
         '-of', 'default=noprint_wrappers=1:nokey=1',
         '-v', 'quiet',
         url
@@ -275,17 +283,20 @@ def property(url, stream, name):
         check=True,
         stdout=subprocess.PIPE
     )
-    return float(process.stdout.decode())
+    return process.stdout.decode()
 
 def duration(url):
     if validators.url(url):
         if url not in videos:
             read_video(url)
         return videos[url].duration
-    return property(url, 'v:0', 'duration')
+    return float(property(url, 'v:0', 'duration'))
 
 def frames_number(url):
-    return property(url, 'v:0', 'nb_frames')
+    return int(property(url, 'v:0', 'nb_frames'))
 
 def frames_rate(url):
-    return eval(property(url, 'v:0', 'r_frame_rate'))
+    return float(eval(property(url, 'v:0', 'r_frame_rate')))
+
+def frames_size(url):
+    return 'x'.join(property(url, 'v:0', 'width,height').splitlines())

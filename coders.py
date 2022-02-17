@@ -42,10 +42,30 @@ def write_video_reencode():
         for f in functions:
             y = f(y)
         return y
-    concat_filter = ['concat=n=%d:v=1:a=0:unsafe=1' % len(mappings.mappings)]
+    if args.output_width and args.output_height:
+        padout_filter = ';'.join([
+            '[%d:v]pad=width=%d:height=%d:x=%d:y=%d[v%d]' % (
+                i,
+                args.output_width,
+                args.output_height,
+                (args.output_width -
+                    videos.videos[mappings.mappings[i].source.url].width) / 2,
+                (args.output_height -
+                    videos.videos[mappings.mappings[i].source.url].height) / 2,
+                i
+            ) for i in range(len(mappings.mappings))
+            ] + [''.join('[v%d]' % i for i in range(len(mappings.mappings)))]
+        )
+    else:
+        padout_filter = ''
+    concat_filter = ['concat=n=%d:v=1:a=0' % len(mappings.mappings)]
     effect_filter, effect_mapper = visual_effects()
     rotate_filter = ['transpose=2'] if args.output_rotate else []
-    filters = concat_filter + effect_filter + rotate_filter
+    filters = padout_filter + ','.join([
+        *concat_filter,
+        *effect_filter,
+        *rotate_filter
+    ])
     subprocess.run([
         'ffmpeg',
         '-loglevel', args.loglevel,
@@ -59,10 +79,10 @@ def write_video_reencode():
             '-i', videos.videos[mapping.source.url].url
             ] for mapping in mappings.mappings
             )),
-        '-t', str(args.output_max_length or
+        '-t', str(args.output_length or
             mappings.mappings[-1].target.final),
         *(['-i', args.audio_output] if args.audio_output else []),
-        '-filter_complex', ', '.join(filters) + '[v]',
+        '-filter_complex', filters + '[v]',
         '-map', '[v]',
         *(['-map', '%d:a' % len(mappings.mappings)]
             if args.audio_output else []),
@@ -76,6 +96,7 @@ def write_video_reencode():
             ['-preset', 'veryfast'] if args.output_quality == 'low' else []),
         *(['-tune', 'film'] if args.output_quality == 'high' else []),
         '-codec:a', 'aac' if args.stream else 'copy',
+        '-tag:v', '7',
         '-tag:a', '10',
         '-f', 'tee',
         '-use_fifo', '1',
@@ -196,16 +217,18 @@ def write_video_with_audio():
         'ffmpeg',
         '-loglevel', args.loglevel,
         *(['-re'] if args.stream else []),
-        '-t', str(args.output_max_length or
+        '-t', str(args.output_length or
             mappings.mappings[-1].target.final),
         '-i', args.video_output,
-        '-t', str(args.output_max_length or
+        '-t', str(args.output_length or
             mappings.mappings[-1].target.final),
         '-i', args.audio_output,
         '-map', '0:v',
         '-map', '1:a',
         '-codec:v', 'copy',
         '-codec:a', 'aac' if args.stream else 'copy',
+        '-tag:v', '7',
+        '-tag:a', '10',
         '-f', 'tee',
         '-use_fifo', '1',
         '|'.join(
@@ -237,19 +260,19 @@ def write_video_batch():
         os.system(f'bash "{temp_file.name}"')
 
 def write_video_batch_cmd(argv):
-    delay = args.output_max_length if args.output_max_length else args.time
-    tasks = int(args.time / delay) if args.loop else 1
-    if args.queue_slots == 1:
-        args.queue_delay = 0
+    delay = args.output_length if args.output_length else args.loop_job_time
+    tasks = int(args.loop_time / delay) if args.loop else 1
+    if args.loop_jobs == 1:
+        args.loop_job_wait = 0
     return ' '.join(
         ('--{ ' if args.play else '') +
             '<( ' +
-                ('sleep {}; '.format((i - 1 + args.queue_delay) * delay)
+                ('sleep {}; '.format((i - 1 + args.loop_job_wait) * delay)
                     if i > 0 else '') +
-                ('timeout --foreground {} '.format(args.queue_slots * delay)
-                    if args.queue_no_pause else '') +
+                ('timeout --foreground {} '.format(args.loop_jobs * delay)
+                    if args.loop_job_kill else '') +
                 'parallel --fg --ungroup --semaphore ' \
-                    '-j{} '.format(args.queue_slots) +
+                    '-j{} '.format(args.loop_jobs) +
                 'python "{}"'.format(
                     '" "'.join(
                         re.sub('"', r'\\\\\\"',
@@ -276,7 +299,7 @@ def write_video_batch_args():
     argv = list(sys.argv)
     if '--loop' in argv:
         argv.remove('--loop')
-    argv[1:1] = ['--ppid', str(os.getpid())]
+    argv[1:1] = ['--loop-ppid', str(os.getpid())]
     if args.play:
         play_video_args(argv)
     return argv
@@ -292,8 +315,8 @@ def play_video_args(argv):
         argv.extend(['--output-quality', 'low'])
     if '--output-format' not in argv and args.output_format:
         argv.extend(['--output-format', args.output_format])
-    if '--videos-max-number' not in argv and len(args.videos) <= 1:
-        argv.extend(['--videos-max-number', '1'])
+    if '--videos-number' not in argv and len(args.videos) <= 1:
+        argv.extend(['--videos-number', '1'])
     if '--loglevel' not in argv:
         argv.extend(['--loglevel', 'quiet'])
 

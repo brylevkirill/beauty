@@ -27,28 +27,28 @@ def mappings_complete():
         for mapping in mappings)
 
 def update(new_mappings):
-    if not args.output_max_length:
+    if not args.output_length:
         mappings[:] = new_mappings
     else:
         mappings[:] = [
             mapping for mapping in new_mappings
-            if mapping.target.start < args.output_max_length
+            if mapping.target.start < args.output_length
         ]
-        if mappings[-1].target.final > args.output_max_length:
+        if mappings[-1].target.final > args.output_length:
             mappings[-1] = Mapping(
                 source = Resource(
                     url = mappings[-1].source.url,
                     start = mappings[-1].source.start,
                     final = (
                         mappings[-1].source.start +
-                        args.output_max_length -
+                        args.output_length -
                         mappings[-1].target.start
                     )
                 ),
                 target = Resource(
                     url = mappings[-1].target.url,
                     start = mappings[-1].target.start,
-                    final = args.output_max_length
+                    final = args.output_length
                 )
             )
 
