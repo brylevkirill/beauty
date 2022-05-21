@@ -7,17 +7,15 @@ import sys
 import typing
 import validators
 
-import mappings
-from beauty import args
-from filters import visual_filter, visual_filter_cuts_base
-from mappings import mappings_complete, Mapping, Resource
-from youtube import youtube_collections, youtube_playlists, youtube_video
+import beauty.mappings as mappings
+from . import args
+from .filters import visual_filter, visual_filter_cuts_base
+from .mappings import mappings_complete, Mapping, Resource
+from .youtube import youtube_collections, youtube_playlists, youtube_video
 
 class Video(typing.NamedTuple):
     url: str
     duration: float
-    width: int
-    height: int
 
 videos = {}
 
@@ -50,20 +48,14 @@ def read_video(url, strict=True):
         if not v:
             assert not strict
             return None
-        width, height = v[2].split('x')
         videos[url] = Video(
             url=v[0],
-            duration=v[1],
-            width=int(width),
-            height=int(height)
+            duration=v[1]
         )
     else:
-        width, height = frames_size(url).split('x')
         videos[url] = Video(
             url=url,
-            duration=duration(url),
-            width=int(width),
-            height=int(height)
+            duration=duration(url)
         )
     return videos[url]
 
@@ -213,16 +205,6 @@ def next_input(n):
         if point <= input_duration:
             break
         point -= input_duration
-    last_mapping = mappings.mappings[n - 1] if n > 0 else None
-    start = (
-        last_mapping.target.final
-        if args.visual_filter_chrono_serial and
-            last_mapping and
-            last_mapping.source and
-            last_mapping.source.url == input and
-            last_mapping.target.final != -1
-        else 0
-    )
     delta = 0.5 * max(
         input_duration * 
         min(1,
@@ -233,8 +215,8 @@ def next_input(n):
         output_duration
     )
     point = random.uniform(
-        max(start, point - delta),
-        max(start, min(point + delta, input_duration) - output_duration)
+        max(0, point - delta),
+        max(0, min(point + delta, input_duration) - output_duration)
     )
     if input in args.inputs:
         for start, final in args.inputs[input]:
@@ -254,8 +236,9 @@ def cache_input(mapping: Mapping, n):
     subprocess.run([
         'ffmpeg',
         '-loglevel', args.loglevel,
-        '-ss', str(mapping.source.start),
-        '-t', str(mapping.source.final -
+        '-ss', '{:.3f}'.format(mapping.source.start),
+        '-t', '{:.3f}'.format(
+            mapping.source.final -
             mapping.source.start +
             args.increment_offset),
         '-i', videos[mapping.source.url].url,
@@ -264,7 +247,6 @@ def cache_input(mapping: Mapping, n):
             ['-crf', '33'] if args.output_quality == 'low' else []),
         *(['-preset', 'slow'] if args.output_quality == 'high' else
             ['-preset', 'veryfast'] if args.output_quality == 'low' else []),
-        *(['-tune', 'film'] if args.output_quality == 'high' else []),
         '-an',
         '-y', args.video_cache % (n + 1)
         ],
@@ -297,6 +279,3 @@ def frames_number(url):
 
 def frames_rate(url):
     return float(eval(property(url, 'v:0', 'r_frame_rate')))
-
-def frames_size(url):
-    return 'x'.join(property(url, 'v:0', 'width,height').splitlines())

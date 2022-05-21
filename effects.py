@@ -3,9 +3,9 @@ import math
 import scipy.optimize
 import warnings
 
-import mappings
-from beauty import args
-from audios import tempo
+import beauty.mappings as mappings
+from . import args
+from .audios import tempo
 
 def visual_effects():
     effects = []

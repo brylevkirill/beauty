@@ -5,7 +5,7 @@ import re
 import typing
 import validators
 
-from beauty import args
+from . import args
 
 class Resource(typing.NamedTuple):
     url: str = None
@@ -51,29 +51,6 @@ def update(new_mappings):
                     final = args.output_length
                 )
             )
-
-def update_filter(source_mappings, target_mappings, timestamp):
-    import datetime
-    ts = datetime.datetime.utcfromtimestamp(timestamp)
-    t = ts.strftime('%H:%M:%S.%f')[:-3]
-    lines = []
-    with open(target_mappings) as f:
-        lines.extend(
-            s for s in f.readlines()
-            if s.split()[1] <= t
-        )
-    with open(source_mappings) as f:
-        lines.extend(
-            (s[:s.rindex('\t')] + s[-1]) for s in f.readlines()
-            if s.split()[0] <= t and t < s.split()[1]
-        )
-    with open(target_mappings) as f:
-        lines.extend(
-            s for s in f.readlines()
-            if t < s.split()[0]
-        )
-    with open(target_mappings, 'w') as f:
-        f.writelines(lines)
 
 def read(custom_file_name=None):
     file_name = args.mappings if custom_file_name is None else custom_file_name

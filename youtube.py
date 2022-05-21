@@ -5,8 +5,8 @@ import subprocess
 import urllib.parse
 import validators
 
-from beauty import args
-from mappings import parse_timestamp, read_subtitles
+from . import args
+from .mappings import parse_timestamp, read_subtitles
 
 def youtube_collections(items, type):
     def process(items, collections):
@@ -124,7 +124,6 @@ def youtube_video(
             '--no-warnings',
             '--get-url',
             '--get-duration',
-            '--get-format',
             '-f', filter,
             '--youtube-skip-dash-manifest',
             url
@@ -144,16 +143,8 @@ def youtube_video(
         raise e
     output = process.stdout.decode().splitlines()
     variants = [
-        (
-            url,
-            parse_timestamp(duration),
-            re.search('\d+x\d+', format).group()
-        )
-        for (
-            url,
-            duration,
-            format
-        ) in zip(*[iter(output)] * 3)
+        (url, parse_timestamp(duration))
+        for (url, duration) in zip(*[iter(output)] * 2)
         if youtube_check_video(url)
     ]
     if strict and not variants:

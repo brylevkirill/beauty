@@ -13,9 +13,9 @@ import subprocess
 import tempfile
 import validators
 
-from beauty import args
-from mappings import Mapping, Resource
-from youtube import youtube_collections, youtube_playlists, youtube_video
+from . import args
+from .mappings import Mapping, Resource
+from .youtube import youtube_collections, youtube_playlists, youtube_video
 
 def read():
     youtube_collections(args.audios, 'audio')
@@ -118,6 +118,7 @@ def generate_mappings():
        not args.mappings_from_notes and
        not args.mappings_from_onsets):
         args.mappings_from_chords = True
+        args.mappings_from_beats = True
     points = sorted(set([
         0,
         *(points_from_chords(args.audio_output)

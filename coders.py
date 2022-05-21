@@ -1,4 +1,3 @@
-import inspect
 import itertools
 import os
 import re
@@ -8,12 +7,12 @@ import sys
 import tempfile
 import uuid
 
-import mappings
-import videos
-from beauty import args
-from mappings import mappings_complete, update_filter
-from videos import read_video
-from effects import visual_effects
+import beauty.mappings as mappings
+import beauty.videos as videos
+from . import args
+from .effects import visual_effects
+from .mappings import mappings_complete
+from .videos import read_video
 
 def write_video(old_mappings):
     if not mappings_complete():
@@ -44,14 +43,10 @@ def write_video_reencode():
         return y
     if args.output_width and args.output_height:
         padout_filter = ';'.join([
-            '[%d:v]pad=width=%d:height=%d:x=%d:y=%d[v%d]' % (
+            '[%d:v]pad=%d:%d:(ow-iw)/2:(oh-ih)/2[v%d]' % (
                 i,
                 args.output_width,
                 args.output_height,
-                (args.output_width -
-                    videos.videos[mappings.mappings[i].source.url].width) / 2,
-                (args.output_height -
-                    videos.videos[mappings.mappings[i].source.url].height) / 2,
                 i
             ) for i in range(len(mappings.mappings))
             ] + [''.join('[v%d]' % i for i in range(len(mappings.mappings)))]
@@ -71,16 +66,17 @@ def write_video_reencode():
         '-loglevel', args.loglevel,
         *(['-re'] if args.stream else []),
         *list(itertools.chain.from_iterable([
-            '-ss', str(mapping.source.start),
-            '-t', '%.3f' % max(0,
-                apply(effect_mapper, mapping.target.final) -
-                apply(effect_mapper, mapping.target.start) +
-                args.reencode_offset),
+            '-ss', '{:.3f}'.format(mapping.source.start),
+            '-t', '{:.3f}'.format(
+                max(0,
+                    apply(effect_mapper, mapping.target.final) -
+                    apply(effect_mapper, mapping.target.start) +
+                    args.reencode_offset)),
             '-i', videos.videos[mapping.source.url].url
             ] for mapping in mappings.mappings
             )),
-        '-t', str(args.output_length or
-            mappings.mappings[-1].target.final),
+        '-t', '{:.3f}'.format(
+            args.output_length or mappings.mappings[-1].target.final),
         *(['-i', args.audio_output] if args.audio_output else []),
         '-filter_complex', filters + '[v]',
         '-map', '[v]',
@@ -94,10 +90,7 @@ def write_video_reencode():
             ['-crf', '33'] if args.output_quality == 'low' else []),
         *(['-preset', 'slow'] if args.output_quality == 'high' else
             ['-preset', 'veryfast'] if args.output_quality == 'low' else []),
-        *(['-tune', 'film'] if args.output_quality == 'high' else []),
-        '-codec:a', 'aac' if args.stream else 'copy',
-        '-tag:v', '7',
-        '-tag:a', '10',
+        '-codec:a', 'aac' if args.output_format == 'flv' else 'copy',
         '-f', 'tee',
         '-use_fifo', '1',
         '|'.join(
@@ -217,18 +210,16 @@ def write_video_with_audio():
         'ffmpeg',
         '-loglevel', args.loglevel,
         *(['-re'] if args.stream else []),
-        '-t', str(args.output_length or
-            mappings.mappings[-1].target.final),
+        '-t', '{:.3f}'.format(
+            args.output_length or mappings.mappings[-1].target.final),
         '-i', args.video_output,
-        '-t', str(args.output_length or
-            mappings.mappings[-1].target.final),
+        '-t', '{:.3f}'.format(
+            args.output_length or mappings.mappings[-1].target.final),
         '-i', args.audio_output,
         '-map', '0:v',
         '-map', '1:a',
         '-codec:v', 'copy',
-        '-codec:a', 'aac' if args.stream else 'copy',
-        '-tag:v', '7',
-        '-tag:a', '10',
+        '-codec:a', 'aac' if args.output_format == 'flv' else 'copy',
         '-f', 'tee',
         '-use_fifo', '1',
         '|'.join(
@@ -249,8 +240,7 @@ def write_video_with_audio():
 def write_video_batch():
     argv = write_video_batch_args()
     if args.play:
-        conf_file = player_config()
-        cmd = player_args(conf_file)
+        cmd = player_args_common()
     else:
         cmd = 'cat '
     cmd += write_video_batch_cmd(argv)
@@ -289,7 +279,7 @@ def write_video_batch_cmd(argv):
                             ] if args.output_subtitles else [])
                     )) +
             ') ' +
-            (player_args_file(id) if args.play else '') +
+            (player_args_select(id) if args.play else '') +
         ('--} ' if args.play else '')
         for i in range(tasks)
         for id in [uuid.uuid1()]
@@ -320,45 +310,18 @@ def play_video_args(argv):
     if '--loglevel' not in argv:
         argv.extend(['--loglevel', 'quiet'])
 
-def player_args(conf_file):
+def player_args_common():
     return (
         'mpv ' +
-        ('--input-conf=\'{}\' '.format(conf_file) if args.input else '') +
         ('--mute=yes ' if args.no_audio and args.no_video else '') +
         ('--no-audio ' if args.no_audio and not args.no_video else '') +
         ('--no-video ' if args.no_video else '') +
         '--cache=yes ' \
         '--fs '
     )
-    return cmd
 
-def player_args_file(id):
+def player_args_select(id):
     return (
-        ('--sub-file=\'{}\' '.format(args.subtitles_output % id)
-            if args.output_subtitles else '') +
-        ('--lavfi-complex=\'' \
-            '[vid2]scale=iw/2:ih/2[v],' \
-            '[vid1][v]overlay=W-w:H-h[vo]\' ' \
-         '--external-file=\'{}\' '.format(args.input)
-            if args.input else '')
+        '--sub-file=\'{}\' '.format(args.subtitles_output % id)
+            if args.output_subtitles else ''
     )
-
-def player_config():
-    conf_file = '%s.input.conf' % args.media_output
-    if args.input:
-        mappings_backup = '%s.mappings.txt' % args.media_output
-        func = inspect.getsource(update_filter).replace('\n', '\\n')
-        call = "update_filter('%s', '%s', ${=time-pos})"
-        with open(conf_file, 'w') as f:
-            f.write(
-                """
-                    MBTN_LEFT_DBL run python -c \"%s\"
-                    MBTN_RIGHT_DBL run python -c \"%s\"
-                    MBTN_RIGHT ignore
-                """ % (
-                    func + call % (args.mappings, args.input_mappings),
-                    func + call % (mappings_backup, args.input_mappings)
-                )
-            )
-        shutil.copyfile(args.input_mappings, mappings_backup)
-    return conf_file

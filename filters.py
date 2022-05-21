@@ -6,8 +6,8 @@ import subprocess
 import sys
 import tempfile
 
-from beauty import args
-from mappings import Mapping
+from . import args
+from .mappings import Mapping
 
 def visual_filter(mapping: Mapping, video):
     filters = [
@@ -123,7 +123,7 @@ def visual_filter_word(mapping: Mapping, video):
     text = None
     for contour in contours:
         x, y, w, h = cv2.boundingRect(contour)
-        text = pytesseract.image_to_string(image[y:y + h, x:x + w])
+        text = pytesseract.image_to_string(image[y:y+h, x:x+w])
         if text:
             break
     return bool(text) == (args.visual_filter_word == 'include')

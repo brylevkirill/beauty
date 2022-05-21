@@ -30,7 +30,6 @@ def init_args():
     arg('--mappings', type=str, metavar='<mappings file>')
 
     arg('--input', type=str, metavar='<video file|URL>')
-    arg('--input-mappings', type=str, metavar='<mappings file>')
 
     arg('--loop')
     arg('--loop-time', type=float, default=3600)
@@ -100,7 +99,6 @@ def init_args():
     arg('--visual-filter-retries', type=int, default=100)
     arg('--visual-filter-ordered')
     arg('--visual-filter-chrono')
-    arg('--visual-filter-chrono-serial')
     arg('--visual-filter-chrono-speed', type=float, default=1.0)
     arg('--visual-filter-chrono-scope', type=float, default=1.0)
     arg('--visual-filter-pace', type=str, choices=['fast', 'slow'])
@@ -187,19 +185,18 @@ def init_args():
     if args.loop and not args.play:
         args.no_audio = args.no_video = True
 
-    import mappings
-
     args.inputs = {}
     last_arg, last_url, start, final = None, None, 0, 0
     for arg in sys.argv:
         if arg == '--start':
-            point = mappings.parse_timestamp(args.start[start])
+            from .mappings import parse_timestamp
+            point = parse_timestamp(args.start[start])
             start += 1
             if last_url not in args.inputs:
                 args.inputs[last_url] = []
             args.inputs[last_url].append((point, -1))
         elif arg == '--final':
-            point = mappings.parse_timestamp(args.final[final])
+            point = parse_timestamp(args.final[final])
             final += 1
             if last_arg == '--start':
                 last_input = args.inputs[last_url][-1]
@@ -217,11 +214,10 @@ def init_args():
             if last_arg == '--videos':
                 last_url = arg
 
-    import videos
-
     if args.cuts:
         for url in args.inputs:
-            mappings = videos.mappings_from_cuts(url)
+            from .videos import mappings_from_cuts
+            mappings = mappings_from_cuts(url)
             points = [mappings[0].start]
             for mapping in mappings:
                 points.append(mapping.final)
@@ -243,15 +239,15 @@ def init_args():
                     points[-1] if final == -1 else bisect_points(final)
                 ]
 
-if __name__ == '__main__':
+def main():
     init_args()
     from beauty import args
 
-    import audios
-    import coders
-    import mappings
-    import videos
-    import youtube
+    import beauty.audios as audios
+    import beauty.coders as coders
+    import beauty.mappings as mappings
+    import beauty.videos as videos
+    import beauty.youtube as youtube
 
     if args.loop or args.play:
         coders.write_video_batch()
@@ -264,13 +260,11 @@ if __name__ == '__main__':
         if not args.mappings_reinit:
             mappings.read()
         else:
-            if args.input_mappings:
-                mappings.read(args.input_mappings)
-            elif args.mappings_from_cuts:
+            if args.mappings_from_cuts:
                 assert args.input
                 new_mappings = videos.mappings_from_cuts(args.input)
                 mappings.update(new_mappings)
-            mappings.write()
+                mappings.write()
         if args.audios:
             args.audios[:] = audios.read()
             if not mappings.mappings:
@@ -287,3 +281,10 @@ if __name__ == '__main__':
             mappings.update(new_mappings)
             mappings.write()
         coders.write_video(old_mappings)
+
+if __package__ is None and not getattr(sys, 'frozen', False):
+    path = os.path.realpath(os.path.abspath(__file__))
+    sys.path.insert(0, os.path.dirname(os.path.dirname(path)))
+
+if __name__ == '__main__':
+    main()
