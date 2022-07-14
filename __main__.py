@@ -10,23 +10,30 @@ import uuid
 
 def init_args():
     parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        formatter_class=
+            argparse.ArgumentDefaultsHelpFormatter
+    )
 
     def arg(*args, **kwargs):
         if 'action' not in kwargs:
-            kwargs['action'] = 'store' if 'type' in kwargs else 'store_true'
+            kwargs['action'] = 'store' \
+                if 'type' in kwargs else 'store_true'
         for a in args:
             if a.startswith('--'):
                 kwargs['dest'] = a[2:].replace('-', '_')
         parser.add_argument(*args, **kwargs)
 
-    opt = '<file|URL> | <YT playlist URL> | "ytsearch"[""|<N>|"all"]":"<query>'
+    opt = '<file|URL> | <YT playlist URL> |' + \
+        '"ytsearch"[""|<N>|"all"]":"<query>'
     arg('--audios', type=str, nargs='+', action='extend',
-        metavar='(%s|"none"|"any"|"orchestral"|"electronic")' % opt)
+        metavar=\
+        '(%s|"none"|"any"|"orchestral"|"electronic")' % opt)
     arg('--videos', type=str, nargs='+', action='extend',
-        metavar='(%s|"none"|"any"|"flowers"|"nightsky"|"slow-mo")' % opt)
-    arg('--output', type=str, nargs='+', action='extend', default=[],
-        metavar='(<file> | <YT or IG live stream URL> | "-" (stdout))')
+        metavar=\
+        '(%s|"none"|"any"|"flowers"|"nightsky")' % opt)
+    arg('--output', type=str, nargs='+', action='extend',
+        default=[], metavar=\
+        '(<file> | <stream URL> | <stdout "-">)')
     arg('--mappings', type=str, metavar='<mappings file>')
 
     arg('--input', type=str, metavar='<video file|URL>')
@@ -34,8 +41,8 @@ def init_args():
     arg('--loop')
     arg('--loop-time', type=float, default=3600)
     arg('--loop-jobs', type=int, default=1)
-    arg('--loop-job-time', type=float, default=60)
-    arg('--loop-job-wait', type=float, default=0.5)
+    arg('--loop-job-time', type=float)
+    arg('--loop-job-wait', type=float, default=0.33)
     arg('--loop-job-kill')
     arg('--loop-ppid', type=int)
 
@@ -54,7 +61,8 @@ def init_args():
     arg('--output-height', type=int)
     arg('--output-rotate')
     arg('--output-length', type=float)
-    arg('--output-quality', type=str, choices=['high', 'medium', 'low'])
+    arg('--output-quality', type=str, default='medium',
+        choices=['high', 'medium', 'low'])
     arg('--output-subtitles')
     arg('--output-id', type=str)
 
@@ -68,7 +76,6 @@ def init_args():
 
     arg('--mappings-reinit')
     arg('--mappings-from-subs')
-    arg('--mappings-from-cuts')
     arg('--mappings-from-chords')
     arg('--mappings-from-chords-chroma')
     arg('--mappings-from-chords-cnn')
@@ -78,37 +85,49 @@ def init_args():
     arg('--mappings-from-beats-tracking')
     arg('--mappings-from-beats-tracking-dbn')
     arg('--mappings-from-notes')
-    arg('--mappings-from-notes-min-length', type=float, default=0.03)
-    arg('--mappings-from-notes-min-volume', type=float, default=-70)
+    arg('--mappings-from-notes-min-length', type=float,
+        default=0.03)
+    arg('--mappings-from-notes-min-volume', type=float,
+        default=-70)
     arg('--mappings-from-notes-rnn')
     arg('--mappings-from-notes-cnn')
     arg('--mappings-from-onsets')
     arg('--mappings-from-onsets-method', type=str,
-        choices=['energy', 'hfc', 'complex', 'phase',
-            'specdiff', 'kl', 'mkl', 'specflux'],
-        default='specflux')
-    arg('--mappings-from-onsets-threshold', type=float, default=0.3)
-    arg('--mappings-from-onsets-min-length', type=float, default=0.02)
-    arg('--mappings-from-onsets-min-volume', type=float, default=-90)
+        default='specflux', choices=[
+            'energy', 'hfc', 'complex', 'phase',
+            'specdiff', 'kl', 'mkl', 'specflux'
+        ])
+    arg('--mappings-from-onsets-threshold', type=float,
+        default=0.3)
+    arg('--mappings-from-onsets-min-length', type=float,
+        default=0.02)
+    arg('--mappings-from-onsets-min-volume', type=float,
+        default=-90)
     arg('--mappings-min-interval', type=float, default=0.2)
     arg('--mappings-max-interval', type=float)
     arg('--mappings-joints', type=int)
     arg('--mappings-splits', type=int)
 
-    arg('--visual-filter-threads', type=int, default=os.cpu_count())
+    arg('--visual-filter-threads', type=int,
+        default=os.cpu_count())
     arg('--visual-filter-retries', type=int, default=100)
     arg('--visual-filter-ordered')
     arg('--visual-filter-chrono')
     arg('--visual-filter-chrono-speed', type=float, default=1.0)
     arg('--visual-filter-chrono-scope', type=float, default=1.0)
-    arg('--visual-filter-pace', type=str, choices=['fast', 'slow'])
+    arg('--visual-filter-pace', type=str,
+        choices=['fast', 'slow'])
     arg('--visual-filter-pace-prob', type=float, default=0.02)
     arg('--visual-filter-pace-rate', type=float, default=0.2)
-    arg('--visual-filter-cuts', type=str, choices=['exclude', 'include'])
+    arg('--visual-filter-cuts', type=str,
+        choices=['exclude', 'include'])
     arg('--visual-filter-cuts-prob', type=float, default=0.05)
-    arg('--visual-filter-dark', type=str, choices=['exclude', 'include'])
-    arg('--visual-filter-face', type=str, choices=['exclude', 'include'])
-    arg('--visual-filter-word', type=str, choices=['exclude', 'include'])
+    arg('--visual-filter-dark', type=str,
+        choices=['exclude', 'include'])
+    arg('--visual-filter-face', type=str,
+        choices=['exclude', 'include'])
+    arg('--visual-filter-word', type=str,
+        choices=['exclude', 'include'])
 
     arg('--visual-effect-speedup')
     arg('--visual-effect-speedup-freq', type=float, default=1)
@@ -125,9 +144,8 @@ def init_args():
     arg('--audio-output', type=str, default='audio.%s.%s')
     arg('--subtitles-output', type=str, default='%s.srt')
 
-    arg('--loglevel', type=str,
-        choices=['quiet', 'repeat+level+warning', 'repeat+level+verbose'],
-        default='repeat+level+warning')
+    arg('--loglevel', type=str, default='warning',
+        choices=['quiet', 'warning', 'verbose'])
 
     import beauty
     beauty.args = parser.parse_args()
@@ -135,45 +153,48 @@ def init_args():
 
     if not args.stream:
         args.stream = any(
-            bool(urllib.parse.urlparse(item).scheme) for item in args.output)
+            bool(urllib.parse.urlparse(item).scheme)
+            for item in args.output
+        )
     if not args.loop_ppid:
         if args.youtube_stream_key:
             args.output.append(
-                'rtmp://a.rtmp.youtube.com/live2/' + args.youtube_stream_key)
-        if args.instagram_username and args.instagram_password:
+                'rtmp://a.rtmp.youtube.com/live2/' +
+                    args.youtube_stream_key
+            )
+        if args.instagram_username and \
+            args.instagram_password:
             live = ItsAGramLive.ItsAGramLive(
                 username=args.instagram_username,
                 password=args.instagram_password)
             if live.login() and live.create_broadcast():
-                args.output.append(live.stream_server + live.stream_key)
+                args.output.append(
+                    live.stream_server + live.stream_key
+                )
                 live.start_broadcast()
 
     if not args.output_format:
-        args.output_format = 'flv' if args.stream or args.play else 'mp4'
+        args.output_format = 'flv' \
+            if args.stream or args.play else 'mp4'
     if not args.videos_format:
         args.videos_format = 'mp4'
     if not args.videos_width and not args.videos_height:
         args.videos_height = 1080
 
-    args.media_output = args.media_output % (
-        args.output_id if args.output_id else uuid.uuid1())
-    args.mappings = (
-        args.media_output + '.txt' if not args.mappings else args.mappings
-    )
-    args.audios = (
-        None if args.audios == ['none'] else
-        ['orchestral'] if not args.audios else args.audios
-    )
-    args.audio_output = (args.audio_output % (
-        args.media_output, 'm4a') if args.audios else None)
-    args.videos = (
-        None if args.videos == ['none'] else
-        ['flowers'] if not args.videos else args.videos
-    )
-    args.video_output = args.video_output % (
-        args.media_output, args.output_format)
-    args.video_cache = args.video_cache % (
-        args.media_output + '.%s.' + args.output_format)
+    args.media_output = args.media_output % \
+        (args.output_id if args.output_id else uuid.uuid1())
+    args.mappings = args.media_output + '.txt' \
+        if not args.mappings else args.mappings
+    args.audios = None if args.audios == ['none'] else \
+        (['orchestral'] if not args.audios else args.audios)
+    args.audio_output = args.audio_output % \
+        (args.media_output, 'm4a') if args.audios else None
+    args.videos = None if args.videos == ['none'] else \
+        (['flowers'] if not args.videos else args.videos)
+    args.video_output = args.video_output % \
+        (args.media_output, args.output_format)
+    args.video_cache = args.video_cache % \
+        (args.media_output + '.%s.' + args.output_format)
     args.media_output += '.' + args.output_format
 
     if args.save:
@@ -201,7 +222,8 @@ def init_args():
             if last_arg == '--start':
                 last_input = args.inputs[last_url][-1]
                 args.inputs[last_url][-1] = (
-                    (last_input[0], point) if point >= last_input[0]
+                    (last_input[0], point)
+                    if point >= last_input[0]
                     else (point, last_input[0])
                 )
             else:
@@ -227,16 +249,19 @@ def init_args():
                     point = points[index]
                 elif index == len(points):
                     point = points[index-1]
-                elif abs(point-points[index-1]) > abs(point-points[index]):
+                elif abs(point-points[index-1]) > \
+                    abs(point-points[index]):
                     point = points[index]
                 else:
                     point = points[index-1]
                 return point
-            for i in range(len(args.inputs[url])):
-                start, final = args.inputs[url][i]
-                args.inputs[url][i] = [
-                    points[0] if start == -1 else bisect_points(start),
-                    points[-1] if final == -1 else bisect_points(final)
+            for idx, item in enumerate(args.inputs[url]):
+                start, final = item
+                args.inputs[url][idx] = [
+                    points[0] if start == -1 \
+                        else bisect_points(start),
+                    points[-1] if final == -1 \
+                        else bisect_points(final)
                 ]
 
 def main():
@@ -259,32 +284,24 @@ def main():
         random.seed(int.from_bytes(os.getrandom(4), 'big'))
         if not args.mappings_reinit:
             mappings.read()
-        else:
-            if args.mappings_from_cuts:
-                assert args.input
-                new_mappings = videos.mappings_from_cuts(args.input)
-                mappings.update(new_mappings)
-                mappings.write()
         if args.audios:
             args.audios[:] = audios.read()
             if not mappings.mappings:
                 if args.mappings_from_subs:
-                    new_mappings = youtube.mappings_from_subs(args.audios[0])
-                if not args.mappings_from_subs or not new_mappings:
-                    new_mappings = audios.generate_mappings()
-                mappings.update(new_mappings)
+                    mappings.mappings[:] = \
+                        youtube.mappings_from_subs(
+                            args.audios[0])
+                else:
+                    mappings.mappings[:] = \
+                        audios.generate_mappings()
                 mappings.write()
-        old_mappings = list(mappings.mappings)
+        previous_mappings = list(mappings.mappings)
         if args.videos:
-            videos.read()
-            new_mappings = videos.generate_mappings()
-            mappings.update(new_mappings)
+            args.videos[:] = videos.read()
+            mappings.mappings[:] = \
+                videos.generate_mappings()
             mappings.write()
-        coders.write_video(old_mappings)
-
-if __package__ is None and not getattr(sys, 'frozen', False):
-    path = os.path.realpath(os.path.abspath(__file__))
-    sys.path.insert(0, os.path.dirname(os.path.dirname(path)))
+        coders.write_video(previous_mappings)
 
 if __name__ == '__main__':
     main()

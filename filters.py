@@ -1,10 +1,5 @@
-import cv2
-import dlib
-import os
-import pytesseract
 import subprocess
 import sys
-import tempfile
 
 from . import args
 from .mappings import Mapping
@@ -17,22 +12,28 @@ def visual_filter(mapping: Mapping, video):
         visual_filter_face,
         visual_filter_word
     ]
-    filters = [f for f in filters if getattr(args, f.__name__)]
+    filters = [
+        f for f in filters if getattr(args, f.__name__)
+    ]
     if args.visual_filter_ordered:
-        filters.sort(key=lambda f:
-            sys.argv.index('--' + f.__name__.replace('_', '-')))
+        filters.sort(
+            key=lambda f:
+                sys.argv.index(
+                    '--' + f.__name__.replace('_', '-')
+                )
+        )
     for f in filters:
         if not f(mapping, video):
             return False
     return True
 
-def visual_filter_base(mapping: Mapping, video, filter_expr, filter_func):
+def visual_filter_base(mapping: Mapping, video, expr, func):
     process = subprocess.run([
         'ffmpeg',
         '-ss', str(mapping.source.start),
         '-to', str(mapping.source.final),
         '-i', video,
-        '-vf', filter_expr,
+        '-vf', expr,
         '-f', 'null',
         '-'
         ],
@@ -40,11 +41,12 @@ def visual_filter_base(mapping: Mapping, video, filter_expr, filter_func):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
-    return filter_func(process.stderr.decode())
+    return func(process.stderr.decode())
 
 def visual_filter_pace(mapping: Mapping, video):
-    filter_expr = ('select=\'gt(scene,%f)\',showinfo' %
-        args.visual_filter_pace_prob)
+    filter_expr = \
+        'select=\'gt(scene,%f)\',showinfo' % \
+            args.visual_filter_pace_prob
     def filter_func(x):
         fast_frames_number = x.count('pts_time:')
         return (
@@ -56,38 +58,52 @@ def visual_filter_pace(mapping: Mapping, video):
         mapping,
         video,
         filter_expr,
-        filter_func)
+        filter_func
+    )
 
 def visual_filter_cuts_base(mapping: Mapping, video):
-    filter_expr = ('select=\'gt(scene,%f)\',showinfo' %
-        args.visual_filter_cuts_prob)
+    filter_expr = \
+        'select=\'gt(scene,%f)\',showinfo' % \
+            args.visual_filter_cuts_prob
     def filter_func(x):
-        return (float(s.split('pts_time:')[1].split()[0])
-            for s in x.splitlines() if 'pts_time:' in s)
+        return (
+            float(s.split('pts_time:')[1].split()[0])
+            for s in x.splitlines()
+                if 'pts_time:' in s
+        )
     return visual_filter_base(
         mapping,
         video,
         filter_expr,
-        filter_func)
+        filter_func
+    )
 
 def visual_filter_cuts(mapping: Mapping, video):
-    cuts = next(iter(visual_filter_cuts_base(mapping, video)), None)
-    return bool(cuts) == (args.visual_filter_cuts == 'include')
+    cuts = next(iter(
+        visual_filter_cuts_base(mapping, video)
+        ), None
+    )
+    return bool(cuts) == \
+        (args.visual_filter_cuts == 'include')
 
 def visual_filter_dark(mapping: Mapping, video):
     dark = visual_filter_base(
         mapping,
         video,
         'blackframe',
-        lambda x: 'pblack:' in x)
-    return bool(dark) == (args.visual_filter_dark == 'include')
+        lambda x: 'pblack:' in x
+    )
+    return bool(dark) == \
+        (args.visual_filter_dark == 'include')
 
 def frame(mapping: Mapping, video, color):
+    import cv2, tempfile
     temp_file = tempfile.NamedTemporaryFile(suffix='.png')
     process = subprocess.run([
         'ffmpeg',
         '-loglevel', args.loglevel,
-        '-ss', str((mapping.source.start + mapping.source.final) / 2),
+        '-ss', str((mapping.source.start +
+            mapping.source.final) / 2),
         '-i', video,
         '-frames:v', str(1),
         '-vcodec', 'png',
@@ -100,30 +116,43 @@ def frame(mapping: Mapping, video, color):
     return image
 
 def visual_filter_face(mapping: Mapping, video):
+    import cv2, dlib
     face = dlib.get_frontal_face_detector()(
-        frame(mapping, video, cv2.COLOR_BGR2RGB))
-    return bool(face) == (args.visual_filter_face == 'include')
+        frame(mapping, video, cv2.COLOR_BGR2RGB)
+    )
+    return bool(face) == \
+        (args.visual_filter_face == 'include')
 
 def visual_filter_word(mapping: Mapping, video):
+    import cv2, pytesseract
     image = frame(mapping, video, cv2.COLOR_BGR2GRAY)
     _, threshold = cv2.threshold(
         image,
         0,
         255,
-        cv2.THRESH_OTSU | cv2.THRESH_BINARY_INV)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (18, 18))
+        cv2.THRESH_OTSU | cv2.THRESH_BINARY_INV
+    )
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT,
+        (18, 18)
+    )
     dilation = cv2.dilate(
         threshold,
         kernel,
-        iterations=1)
+        iterations=1
+    )
     contours, _ = cv2.findContours(
         dilation,
         cv2.RETR_EXTERNAL,
-        cv2.CHAIN_APPROX_NONE)
+        cv2.CHAIN_APPROX_NONE
+    )
     text = None
     for contour in contours:
         x, y, w, h = cv2.boundingRect(contour)
-        text = pytesseract.image_to_string(image[y:y+h, x:x+w])
+        text = pytesseract.image_to_string(
+            image[y:y+h, x:x+w]
+        )
         if text:
             break
-    return bool(text) == (args.visual_filter_word == 'include')
+    return bool(text) == \
+        (args.visual_filter_word == 'include')

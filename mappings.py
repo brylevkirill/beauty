@@ -26,45 +26,15 @@ def mappings_complete():
         mapping.source.final != -1
         for mapping in mappings)
 
-def update(new_mappings):
-    if not args.output_length:
-        mappings[:] = new_mappings
-    else:
-        mappings[:] = [
-            mapping for mapping in new_mappings
-            if mapping.target.start < args.output_length
-        ]
-        if mappings[-1].target.final > args.output_length:
-            mappings[-1] = Mapping(
-                source = Resource(
-                    url = mappings[-1].source.url,
-                    start = mappings[-1].source.start,
-                    final = (
-                        mappings[-1].source.start +
-                        args.output_length -
-                        mappings[-1].target.start
-                    )
-                ),
-                target = Resource(
-                    url = mappings[-1].target.url,
-                    start = mappings[-1].target.start,
-                    final = args.output_length
-                )
-            )
+def read():
+    with open(args.mappings) as f:
+        mappings[:] = list(map(
+            parse_mapping, f.read().splitlines()
+        ))
 
-def read(custom_file_name=None):
-    file_name = args.mappings if custom_file_name is None else custom_file_name
-    with open(file_name) as f:
-        mappings[:] = [parse_mapping(s) for s in f.read().splitlines()]
-
-def write(custom_file_name=None, custom_mappings=None):
-    file_name = args.mappings if custom_file_name is None else custom_file_name
-    with open(file_name, 'w') as f:
-        f.writelines(
-            format_mapping(mapping) for mapping in (
-                mappings if custom_mappings is None else custom_mappings
-            )
-        )
+def write():
+    with open(args.mappings, 'w') as f:
+        f.writelines(map(format_mapping, mappings))
     if args.output_subtitles:
         write_subtitles(
             args.subtitles_output % args.media_output if (
@@ -84,8 +54,8 @@ def parse_mapping(s):
     return Mapping(
         source = Resource(
             url = t[2] if t[2:] else None,
-            start = parse_timestamps(t[3]) if t[3:] else -1,
-            final = parse_timestamps(t[4]) if t[4:] else -1
+            start = parse_timestamp(t[3]) if t[3:] else -1,
+            final = parse_timestamp(t[4]) if t[4:] else -1
         ),
         target = Resource(
             start = parse_timestamp(t[0]),
@@ -94,14 +64,19 @@ def parse_mapping(s):
     )
 
 def format_mapping(mapping: Mapping):
-    return (format_timestamp(mapping.target.start) +
+    return (
+        format_timestamp(mapping.target.start) +
         '\t' + format_timestamp(mapping.target.final) +
         ('\t' + mapping.source.url
-            if mapping.source and mapping.source.url else '') +
-        ('\t' + format_timestamps(mapping.source.start)
-            if mapping.source and mapping.source.start != -1 else '') +
-        ('\t' + format_timestamps(mapping.source.final)
-            if mapping.source and mapping.source.final != -1 else '') + '\n'
+            if mapping.source and mapping.source.url
+            else '') +
+        ('\t' + format_timestamp(mapping.source.start)
+            if mapping.source and mapping.source.start != -1
+            else '') +
+        ('\t' + format_timestamp(mapping.source.final)
+            if mapping.source and mapping.source.final != -1
+            else '') +
+        '\n'
     )
 
 def read_subtitles(file_name):
@@ -114,7 +89,8 @@ def read_subtitles(file_name):
                 )
             )
             for t in (
-                s.split(' --> ') for s in f.read().splitlines()
+                s.split(' --> ')
+                for s in f.read().splitlines()
             )
             if t[1:]
         ]
@@ -123,16 +99,12 @@ def write_subtitles(file_name):
     with open(file_name, 'w') as f:
         f.writelines(
             '%d\n%s --> %s\n%d\n\n' % (
-                i + 1,
-                format_timestamps(mappings[i].target.start),
-                format_timestamps(mappings[i].target.final),
-                i + 1)
-            for i in range(len(mappings))
+                idx + 1,
+                format_timestamp(item.target.start),
+                format_timestamp(item.target.final),
+                idx + 1)
+            for idx, item in enumerate(mappings)
         )
-
-def parse_timestamps(s):
-    ts = [parse_timestamp(t) for t in s.split(',')]
-    return ts if len(ts) > 1 else ts[0]
 
 def parse_timestamp(s):
     try:
@@ -142,7 +114,9 @@ def parse_timestamp(s):
     t = s.split(':')
     if t[1:] and int(t[0]) >= 60:
         s = ':'.join([
-            str(int(t[0]) // 60), str(int(t[0]) % 60).zfill(2), *t[1:]
+            str(int(t[0]) // 60),
+            str(int(t[0]) % 60).zfill(2),
+            *t[1:]
         ])
     if '.' not in s:
         s += '.0'
@@ -153,11 +127,9 @@ def parse_timestamp(s):
             t = datetime.datetime.strptime(s, '%H:%M:%S.%f')
         except ValueError:
             t = datetime.datetime.strptime(s, '%M:%S.%f')
-    return t.hour * 3600 + t.minute * 60 + t.second + t.microsecond * 0.000001
-
-def format_timestamps(t):
-    ts = t if type(t) is list else [t]
-    return ','.join(format_timestamp(x) for x in ts)
+    return t.hour * 3600 + t.minute * 60 + \
+        t.second + t.microsecond * 0.000001
 
 def format_timestamp(t):
-    return datetime.datetime.utcfromtimestamp(t).strftime('%H:%M:%S.%f')[:-3]
+    return datetime.datetime.utcfromtimestamp(t). \
+        strftime('%H:%M:%S.%f')[:-3]

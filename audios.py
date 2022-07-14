@@ -1,12 +1,5 @@
-import aubio
 import collections
 import itertools
-import madmom.audio.chroma
-import madmom.features.beats
-import madmom.features.chords
-import madmom.features.notes
-import numpy
-import pydub
 import random
 import shutil
 import subprocess
@@ -15,7 +8,11 @@ import validators
 
 from . import args
 from .mappings import Mapping, Resource
-from .youtube import youtube_collections, youtube_playlists, youtube_video
+from .youtube import (
+    youtube_collections,
+    youtube_playlists,
+    youtube_video
+)
 
 def read():
     youtube_collections(args.audios, 'audio')
@@ -28,11 +25,13 @@ def read():
             shutil.copyfile(audio, args.audio_output)
             break
         else:
-            if args.mappings_reinit or args.visual_effect_speedup:
+            if args.mappings_reinit or \
+                args.visual_effect_speedup:
                 if read_audio(audio):
                     break
             else:
-                if 'youtube.com' in audio or 'youtu.be' in audio:
+                if 'youtube.com' in audio or \
+                    'youtu.be' in audio:
                     video = youtube_video(
                         audio,
                         filter='bestaudio[ext=m4a]',
@@ -46,7 +45,9 @@ def read():
 def read_audio(url):
     if not fetch_audio(url, args.audio_output):
         return False
-    shape_audio(args.audio_output, length=args.output_length)
+    shape_audio(
+        args.audio_output, length=args.output_length
+    )
     return True
 
 def fetch_audio(url, file_name):
@@ -76,6 +77,7 @@ def fetch_audio(url, file_name):
             raise e
 
 def shape_audio(file_name, length=None):
+    import pydub
     sound = pydub.AudioSegment.from_file(file_name)
     chunks = pydub.silence.detect_nonsilent(
         sound,
@@ -83,10 +85,14 @@ def shape_audio(file_name, length=None):
         silence_thresh=-50)
     assert chunks
     start, final = chunks[0]
-    start, final, total = start / 1000, final / 1000, len(sound) / 1000
+    start, final, total = \
+        start / 1000, final / 1000, len(sound) / 1000
     final = length if length and length < final else final
     if start != 0 or final != total:
-        temp_file = tempfile.NamedTemporaryFile(suffix='.m4a', delete=False)
+        temp_file = tempfile.NamedTemporaryFile(
+            suffix='.m4a',
+            delete=False
+        )
         temp_file.close()
         process = subprocess.run([
             'ffmpeg',
@@ -133,14 +139,18 @@ def generate_mappings():
     ]))
     if args.output_length:
         points[:] = [
-            p for p in points
-            if p < args.output_length
-            ] + [args.output_length]
+            p
+            for p in points
+                if p < args.output_length
+        ] + [args.output_length]
     if args.mappings_joints and args.mappings_joints > 1:
-        points[:] = points[:-1:args.mappings_joints] + [points[-1]]
+        points[:] = \
+            points[:-1:args.mappings_joints] + [points[-1]]
     if args.mappings_splits and args.mappings_splits > 1:
         points[:] = [
-            points[i] + (points[i + 1] - points[i]) * j / args.mappings_splits
+            points[i] +
+                (points[i + 1] - points[i]) *
+                    j / args.mappings_splits
             for i in range(len(points) - 1)
             for j in range(args.mappings_splits)
         ] + [points[-1]]
@@ -158,9 +168,12 @@ def generate_mappings():
         points[1:-1] = [
             points[i]
             for i in range(1, len(points) - 1)
-            if points[i] - p[0] >= args.mappings_min_interval and
-                points[-1] - points[i] >= args.mappings_min_interval and
-                not p.remove(p[0]) and not p.append(points[i])
+                if points[i] - p[0] >= \
+                    args.mappings_min_interval and
+                    points[-1] - points[i] >= \
+                        args.mappings_min_interval and
+                    not p.remove(p[0]) and
+                    not p.append(points[i])
         ]
     return [
         Mapping(
@@ -173,62 +186,87 @@ def generate_mappings():
     ]
 
 def points_from_chords(file_name):
+    from madmom.audio.chroma import DeepChromaProcessor
+    from madmom.features.chords import (
+        DeepChromaChordRecognitionProcessor,
+        CRFChordRecognitionProcessor,
+        CNNChordFeatureProcessor
+    )
     if (not args.mappings_from_chords_chroma and
         not args.mappings_from_chords_cnn):
         args.mappings_from_chords_chroma = True
     proc = []
     feat = []
     if args.mappings_from_chords_chroma:
-        proc.append(
-            madmom.features.chords.DeepChromaChordRecognitionProcessor()
-        )
-        feat.append(madmom.audio.chroma.DeepChromaProcessor()(
-            file_name
-        ))
+        proc.append(DeepChromaChordRecognitionProcessor())
+        feat.append(DeepChromaProcessor()(file_name))
     if args.mappings_from_chords_cnn:
-        proc.append(
-            madmom.features.chords.CRFChordRecognitionProcessor()
-        )
-        feat.append(madmom.features.chords.CNNChordFeatureProcessor()(
-            file_name
-        ))
+        proc.append(CRFChordRecognitionProcessor())
+        feat.append(CNNChordFeatureProcessor()(file_name))
     return set(itertools.chain.from_iterable(
-        (e for (_, e, _) in p(f)) for (p, f) in zip(proc, feat)
+        (e for (_, e, _) in p(f))
+        for (p, f) in zip(proc, feat)
     ))
 
 def points_from_beats(file_name):
+    from madmom.features.beats import (
+        BeatDetectionProcessor,
+        CRFBeatDetectionProcessor,
+        BeatTrackingProcessor,
+        DBNBeatTrackingProcessor,
+        RNNBeatProcessor
+    )
     if (not args.mappings_from_beats_detection and
         not args.mappings_from_beats_detection_crf and
         not args.mappings_from_beats_tracking and
         not args.mappings_from_beats_tracking_dbn):
-        args.mappings_from_beats_tracking = True
         if not args.mappings_joints:
-            args.mappings_joints = 4
+            args.mappings_joints = 8
+        return points_from_beats_aubio(file_name)
     proc = []
     if args.mappings_from_beats_detection:
-        proc.append(madmom.features.beats.BeatDetectionProcessor(
+        proc.append(BeatDetectionProcessor(
             fps=100
         ))
     if args.mappings_from_beats_detection_crf:
-        proc.append(madmom.features.beats.CRFBeatDetectionProcessor(
+        proc.append(CRFBeatDetectionProcessor(
             min_bpm=50,
             max_bpm=100,
             fps=100
         ))
     if args.mappings_from_beats_tracking:
-        proc.append(madmom.features.beats.BeatTrackingProcessor(
+        proc.append(BeatTrackingProcessor(
             fps=100
         ))
     if args.mappings_from_beats_tracking_dbn:
-        proc.append(madmom.features.beats.DBNBeatTrackingProcessor(
+        proc.append(DBNBeatTrackingProcessor(
             min_bpm=50,
             max_bpm=100,
             fps=100
         ))
     return set(itertools.chain.from_iterable(
-        p(madmom.features.beats.RNNBeatProcessor()(file_name))
-        for p in proc
+        p(RNNBeatProcessor()(file_name)) for p in proc
     ))
+
+def points_from_beats_aubio(file_name):
+    import aubio
+    source = aubio_source(file_name)
+    win_s, hop_s, samplerate = 1024, 512, 0
+    tempi = aubio.tempo(
+        "specdiff",
+        win_s,
+        hop_s,
+        samplerate
+    )
+    beats = []
+    while True:
+        samples, read = source()
+        is_beat = tempi(samples)
+        if is_beat:
+            beats.append(tempi.get_last_s())
+        if read < hop_s:
+            break
+    return beats
 
 def points_from_notes(file_name):
     if (not args.mappings_from_notes_rnn and
@@ -237,27 +275,39 @@ def points_from_notes(file_name):
     proc = []
     act = []
     if args.mappings_from_notes_rnn:
-        proc.append(madmom.features.notes.NotePeakPickingProcessor(
+        from madmom.features.notes import (
+            NotePeakPickingProcessor,
+            RNNPianoNoteProcessor,
+        )
+        proc.append(NotePeakPickingProcessor(
             fps=100,
             pitch_offset=21
         ))
-        act.append(madmom.features.notes.RNNPianoNoteProcessor()(
-            file_name
-        ))
+        act.append(RNNPianoNoteProcessor()(file_name))
     if args.mappings_from_notes_cnn:
-        proc.append(madmom.features.notes.ADSRNoteTrackingProcessor())
-        act.append(madmom.features.notes.CNNPianoNoteProcessor()(
-            file_name
-        ))
+        from madmom.features.notes import (
+            ADSRNoteTrackingProcessor,
+            CNNPianoNoteProcessor
+        )
+        proc.append(ADSRNoteTrackingProcessor())
+        act.append(CNNPianoNoteProcessor()(file_name))
     return set(itertools.chain.from_iterable(
-        (t for (t, *_) in p(a)) for (p, a) in zip(proc, act)
+        (t for (t, *_) in p(a))
+        for (p, a) in zip(proc, act)
     ))
 
 def points_from_notes_aubio(file_name):
+    import aubio
     source = aubio_source(file_name)
-    notes = aubio.notes(samplerate=source.samplerate)
-    notes.set_minioi_ms(args.mappings_from_notes_min_length * 1000)
-    notes.set_silence(args.mappings_from_notes_min_volume)
+    notes = aubio.notes(
+        samplerate=source.samplerate
+    )
+    notes.set_minioi_ms(
+        args.mappings_from_notes_min_length * 1000
+    )
+    notes.set_silence(
+        args.mappings_from_notes_min_volume
+    )
     points = []
     frames = 0
     while True:
@@ -270,18 +320,28 @@ def points_from_notes_aubio(file_name):
     return set(points)
 
 def points_from_onsets(file_name):
+    import aubio
     source = aubio_source(file_name)
     onset = aubio.onset(
         args.mappings_from_onsets_method,
-        samplerate=source.samplerate)
-    onset.set_threshold(args.mappings_from_onsets_threshold)
-    onset.set_minioi_ms(args.mappings_from_onsets_min_length * 1000)
-    onset.set_silence(args.mappings_from_onsets_min_volume)
+        samplerate=source.samplerate
+    )
+    onset.set_threshold(
+        args.mappings_from_onsets_threshold
+    )
+    onset.set_minioi_ms(
+        args.mappings_from_onsets_min_length * 1000
+    )
+    onset.set_silence(
+        args.mappings_from_onsets_min_volume
+    )
     points = []
     while True:
         samples, read = source()
         if onset(samples):
-            points.append(onset.get_last() / source.samplerate)
+            points.append(
+                onset.get_last() / source.samplerate
+            )
         if read < source.hop_size:
             break
     return set(points)
@@ -307,38 +367,35 @@ def tempo(file_name):
     return tempo_from_beats_madmom(file_name)
 
 def tempo_from_beats_madmom(file_name):
-    proc = madmom.features.tempo.TempoEstimationProcessor(fps=100)
-    act = madmom.features.beats.RNNBeatProcessor()(file_name)
+    from madmom.features.tempo import TempoEstimationProcessor
+    from madmom.features.beats import RNNBeatProcessor
+    proc = TempoEstimationProcessor(fps=100)
+    act = RNNBeatProcessor()(file_name)
     return proc(act)[0][0]
 
 def tempo_from_beats_aubio(file_name):
-    source = aubio_source(file_name)
-    win_s, hop_s, samplerate = 1024, 512, 44100
-    tempi = aubio.tempo("specdiff", win_s, hop_s, samplerate)
-    beats = []
-    while True:
-        samples, read = source()
-        is_beat = tempi(samples)
-        if is_beat:
-            this_beat = tempi.get_last_s()
-            beats.append(this_beat)
-        if read < hop_s:
-            break
+    import numpy
+    beats = points_from_beats_aubio(file_name)
     bpms = 60 / numpy.diff(beats)
     return numpy.median(bpms)
 
 def tempo_from_chords(file_name):
-    proc = madmom.features.chords.DeepChromaChordRecognitionProcessor()
-    feat = madmom.audio.chroma.DeepChromaProcessor()(file_name)
+    from madmom.features.chords import (
+        DeepChromaChordRecognitionProcessor
+    )
+    from madmom.audio.chroma import DeepChromaProcessor
+    proc = DeepChromaChordRecognitionProcessor()
+    feat = DeepChromaProcessor()(file_name)
     intervals = [
-        (e - s - (e - s) % 0.01) for (s, e, _) in proc(feat)] or [
-        duration(file_name)
-    ]
-    return 60 / collections.Counter(intervals).most_common(1)[0][0]
+        (e - s - (e - s) % 0.01) for (s, e, _) in proc(feat)
+        ] or [duration(file_name)]
+    return 60 / \
+        collections.Counter(intervals).most_common(1)[0][0]
 
 def aubio_source(file_name):
+    import aubio, pydub
     sound = pydub.AudioSegment.from_file(file_name)
     temp_file = tempfile.NamedTemporaryFile(suffix='.wav')
     sound.export(temp_file.name, format='wav')
-    samplerate, hop_s = 44100, 512
+    samplerate, hop_s = 0, 512
     return aubio.source(temp_file.name, samplerate, hop_s)

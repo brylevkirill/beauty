@@ -20,43 +20,56 @@ def visual_effects():
     return filters, mappers
 
 def visual_effects_speedup_cosine():
-    interval = 60 / tempo(args.audio_output) / args.visual_effect_speedup_freq
+    interval = 60 / \
+        tempo(args.audio_output) / \
+        args.visual_effect_speedup_freq
     def f(x, p, y):
         x0 = x * p + math.pi / 2
         return (2 * (x0 - x0 % math.pi) / math.pi
             - math.cos(x0 % math.pi)) / p - y
     warnings.filterwarnings(
-        'ignore', 'The iteration is not making good progress')
+        'ignore',
+        'The iteration is not making good progress'
+    )
     def fx(p, y):
         return f(math.pi / p, p, y)
-    p = scipy.optimize.fsolve(functools.partial(fx, y=interval), 1)[0]
-    filter = 'setpts=\'' \
-        '(2 * (T * %.6f + PI / 2 - mod(T * %.6f + PI / 2, PI)) / PI' \
-        '- cos(mod(T * %.6f + PI / 2, PI))) / %.6f / TB\'' % tuple([p] * 4)
+    p = scipy.optimize.fsolve(
+        functools.partial(fx, y=interval), 1
+        )[0]
+    filter = (
+        'setpts=\'(' \
+            '(T * %.6f + PI / 2 - ' \
+                'mod(T * %.6f + PI / 2, PI)) / PI * 2 - ' \
+            'cos(mod(T * %.6f + PI / 2, PI))' \
+            ') / %.6f / TB\''
+        ) % tuple([p] * 4)
     def mapper(y):
-        return scipy.optimize.fsolve(functools.partial(f, p=p, y=y), y)[0]
+        return scipy.optimize.fsolve(
+            functools.partial(f, p=p, y=y), y
+        )[0]
     return filter, mapper
 
 def visual_effects_speedup_custom():
     mapping = [(
-        mappings.mappings[i].target.start,
-        mappings.mappings[i].target.final,
-        (mappings.mappings[i].source.final -
-            mappings.mappings[i].source.start) /
-        (mappings.mappings[i].target.final -
-            mappings.mappings[i].target.start)
-        ) for i in range(len(mappings.mappings))
+        item.target.start,
+        item.target.final,
+        (item.source.final - item.source.start) /
+        (item.target.final - item.target.start)
+        ) for item in mappings.mappings
     ]
     inverse_mapping = []
     filter = '%s'
     time = 0
     for (start, final, speed) in mapping:
         delta = (final - start) * speed
-        filter = filter % ('if(lt(T,%f),%f+(T-%f)*%f,%%s)' % (
-            time + delta,
-            start,
-            time,
-            speed))
+        filter = filter % (
+            'if(lt(T,%f),%f+(T-%f)*%f,%%s)' % (
+                time + delta,
+                start,
+                time,
+                speed
+            )
+        )
         inverse_mapping.append((time, time + delta, speed))
         time += delta
     filter = 'setpts=\'%s / TB\'' % filter % final
