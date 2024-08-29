@@ -1,0 +1,15 @@
+validators
+ffmpeg
+youtube-dl
+mpv
+pydub
+Cython
+numpy
+madmom
+aubio
+cmake
+dlib
+opencv-python
+tesseract-ocr
+pytesseract
+ItsAGramLive
