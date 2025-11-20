@@ -1,0 +1,6 @@
+aubio
+audioop-lts
+madmom
+pyaudio
+pydub
+validators
